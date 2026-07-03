@@ -99,7 +99,7 @@ extension RIFXFile {
       return nil
     }
     return try withPayloadSpan(of: entry) { payload in
-      MovieConfigChunk(rawData: Data(parsingRemainingBytes: &payload))
+      try MovieConfigChunk(parsing: &payload)
     }
   }
 
