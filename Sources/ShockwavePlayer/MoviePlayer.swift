@@ -26,10 +26,14 @@ public final class MoviePlayer: LingoVMHost {
   /// by span index in `score.spans`.
   var activeSpans: [Int: [ScriptInstance]] = [:]
   var movieHandlerNames: Set<String> = []
+  /// Last id handed out by a network-verb stub (see
+  /// `registerNetworkingBuiltins`).
+  var lastNetID = 0
 
   public init(movie: Movie) {
     self.movieModel = movie
     registerBuiltins()
+    registerNetworkingBuiltins()
     registerMovieHandlers()
   }
 
@@ -38,6 +42,21 @@ public final class MoviePlayer: LingoVMHost {
   /// shapes; the VM only distinguishes pre/post 500).
   public var lingoVersion: UInt16 {
     movieModel.fileVersion >= 0x4C7 ? 700 : 400
+  }
+
+  /// The FPS in effect for `currentFrame`: the tempo channel's authored
+  /// value if the current frame set one, else the movie's own frame rate,
+  /// else Director's default of 30. Puppeting the tempo directly (as
+  /// opposed to authoring it on the score) isn't modeled here yet.
+  public var effectiveTempo: Int {
+    movieModel.score?.frameTempo(at: currentFrame)
+      ?? (movieModel.frameRate > 0 ? movieModel.frameRate : 30)
+  }
+
+  /// Milliseconds the host should wait before advancing to the next frame,
+  /// derived from `effectiveTempo`.
+  public var frameDelayMs: Double {
+    1000.0 / Double(max(effectiveTempo, 1))
   }
 
   // MARK: - LingoVMHost
