@@ -2,8 +2,10 @@ import BinaryParsing
 
 /// A four-character chunk tag, e.g. `RIFX`, `imap`, `mmap`.
 ///
-/// RIFX chunk tags are stored as literal ASCII bytes in file order regardless
-/// of the container's numeric byte order, so this always reads as big-endian.
+/// Chunk tags follow the container's numeric byte order: in a little-endian
+/// (`XFIR`) file every tag appears byte-reversed on disk (`pami` for `imap`,
+/// `39VM` for `MV93`), so tags parse as `UInt32`s in the container's byte
+/// order to normalize back to their canonical big-endian spelling.
 public struct FourCharCode: RawRepresentable, Hashable, Sendable {
   public var rawValue: UInt32
 
@@ -37,7 +39,7 @@ extension FourCharCode: CustomStringConvertible {
 }
 
 extension FourCharCode {
-  public init(parsing input: inout ParserSpan) throws(ParsingError) {
-    rawValue = try UInt32(parsingBigEndian: &input)
+  public init(parsing input: inout ParserSpan, byteOrder: Endianness) throws(ParsingError) {
+    rawValue = try UInt32(parsing: &input, endianness: byteOrder)
   }
 }
