@@ -4,14 +4,21 @@ import ShockwaveFile
 /// Converts decoded `BITD` pixel rows into RGBA8888 (byte order R,G,B,A)
 /// for SDL textures.
 enum BitmapConversion {
-  /// - Parameter transparentWhite: substitute for background-transparent
-  ///   and matte inks until real ink compositing exists — pixels matching
-  ///   the palette's white (or pure white in direct color) become clear.
+  /// - Parameters:
+  ///   - transparent: whether this sprite's ink mode keys out a background
+  ///     color (Director's "matte"/"background transparent" inks) rather
+  ///     than compositing every pixel opaque ("copy").
+  ///   - backColorIndex: the sprite record's own `backColor` — the palette
+  ///     index Director actually keys transparency against for indexed
+  ///     bitmaps, not necessarily white. Ignored for direct-color depths
+  ///     (16/32-bit), where a plain white-detection heuristic is used
+  ///     instead pending real matte/mask support.
   static func rgba(
     pixels: [UInt8],
     properties: BitmapMemberProperties,
     palette: [PaletteChunk.Color],
-    transparentWhite: Bool
+    transparent: Bool,
+    backColorIndex: Int
   ) -> [UInt8]? {
     let width = properties.bounds.width
     let height = properties.bounds.height
@@ -29,14 +36,18 @@ enum BitmapConversion {
 
     switch properties.bitsPerPixel {
     case 1:
+      // A 1-bit image's implicit 2-entry palette is {white, black} at
+      // indices {0, 1}; key against whichever index backColor names.
+      let backBit = backColorIndex & 1
       for y in 0..<height {
         let row = y * rowBytes
         for x in 0..<width {
-          let bit = (pixels[row + x / 8] >> (7 - x % 8)) & 1
+          let bit = Int((pixels[row + x / 8] >> (7 - x % 8)) & 1)
+          let clear = transparent && bit == backBit
           if bit == 1 {
-            write(x, y, 0, 0, 0, 255)
+            write(x, y, 0, 0, 0, clear ? 0 : 255)
           } else {
-            write(x, y, 255, 255, 255, transparentWhite ? 0 : 255)
+            write(x, y, 255, 255, 255, clear ? 0 : 255)
           }
         }
       }
@@ -47,13 +58,14 @@ enum BitmapConversion {
           let index = Int(pixels[row + x])
           guard index < palette.count else { continue }
           let color = palette[index]
-          let clear =
-            transparentWhite && color.red == 255 && color.green == 255 && color.blue == 255
+          let clear = transparent && index == backColorIndex
           write(x, y, color.red, color.green, color.blue, clear ? 0 : 255)
         }
       }
     case 16:
-      // Big-endian X1R5G5B5.
+      // Big-endian X1R5G5B5. No indexed backColor to key against at this
+      // depth; approximate with white-detection pending real matte/mask
+      // support.
       for y in 0..<height {
         let row = y * rowBytes
         for x in 0..<width {
@@ -61,7 +73,7 @@ enum BitmapConversion {
           let r = UInt8((value >> 10) & 0x1F) << 3
           let g = UInt8((value >> 5) & 0x1F) << 3
           let b = UInt8(value & 0x1F) << 3
-          let clear = transparentWhite && r >= 0xF8 && g >= 0xF8 && b >= 0xF8
+          let clear = transparent && r >= 0xF8 && g >= 0xF8 && b >= 0xF8
           write(x, y, r, g, b, clear ? 0 : 255)
         }
       }
