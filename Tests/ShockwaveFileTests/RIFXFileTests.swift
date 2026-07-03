@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import ShockwaveTestSupport
 import Testing
 
 @testable import ShockwaveFile
@@ -45,10 +46,7 @@ import Testing
 }
 
 private func realMovieData() throws -> Data {
-  let url = try #require(
-    Bundle.module.url(
-      forResource: "junkbot2_13g_asp", withExtension: "dir", subdirectory: "Resources"))
-  return try Data(contentsOf: url)
+  try Data(contentsOf: TestResources.junkbotMovieURL)
 }
 
 @Test func realMovieParsesHeader() throws {
@@ -271,10 +269,7 @@ private func realMovieData() throws -> Data {
 }
 
 @Test func realShockwaveMovieIsDetectedAsCompressed() throws {
-  let url = try #require(
-    Bundle.module.url(
-      forResource: "junkbot2_13g_asp", withExtension: "dcr", subdirectory: "Resources"))
-  let data = try Data(contentsOf: url)
+  let data = try Data(contentsOf: TestResources.junkbotShockwaveURL)
   #expect(throws: ShockwaveFileError.compressedContainerUnsupported) {
     try RIFXFile.read(from: data)
   }

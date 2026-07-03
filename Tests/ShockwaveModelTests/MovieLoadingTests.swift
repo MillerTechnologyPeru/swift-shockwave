@@ -2,15 +2,13 @@ import Foundation
 import LingoBytecode
 import LingoRuntime
 import ShockwaveFile
+import ShockwaveTestSupport
 import Testing
 
 @testable import ShockwaveModel
 
 private func realMovie() throws -> Movie {
-  let url = try #require(
-    Bundle.module.url(
-      forResource: "junkbot2_13g_asp", withExtension: "dir", subdirectory: "Resources"))
-  let file = try RIFXFile.read(from: Data(contentsOf: url))
+  let file = try RIFXFile.read(from: Data(contentsOf: TestResources.junkbotMovieURL))
   return try Movie.load(from: file)
 }
 
@@ -150,8 +148,5 @@ private func realMovie() throws -> Movie {
 }
 
 private func realMovieData() throws -> Data {
-  let url = try #require(
-    Bundle.module.url(
-      forResource: "junkbot2_13g_asp", withExtension: "dir", subdirectory: "Resources"))
-  return try Data(contentsOf: url)
+  try Data(contentsOf: TestResources.junkbotMovieURL)
 }
