@@ -14,7 +14,8 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/MillerTechnologyPeru/swift-lingo", branch: "master"),
-        .package(url: "https://github.com/apple/swift-binary-parsing", from: "0.0.1")
+        .package(url: "https://github.com/apple/swift-binary-parsing", from: "0.0.1"),
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0")
     ],
     targets: [
         .target(
@@ -54,7 +55,8 @@ let package = Package(
             name: "ShockwaveSDL3",
             dependencies: [
                 "CSDL3", "ShockwaveFile", "ShockwaveModel", "ShockwavePlayer",
-                .product(name: "LingoRuntime", package: "swift-lingo")
+                .product(name: "LingoRuntime", package: "swift-lingo"),
+                .product(name: "ArgumentParser", package: "swift-argument-parser")
             ],
             swiftSettings: [.enableUpcomingFeature("ApproachableConcurrency")]
         ),
