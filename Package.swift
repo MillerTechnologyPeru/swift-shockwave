@@ -9,7 +9,8 @@ let package = Package(
     products: [
         .library(name: "ShockwaveFile", targets: ["ShockwaveFile"]),
         .library(name: "ShockwaveModel", targets: ["ShockwaveModel"]),
-        .library(name: "ShockwavePlayer", targets: ["ShockwavePlayer"])
+        .library(name: "ShockwavePlayer", targets: ["ShockwavePlayer"]),
+        .executable(name: "ShockwaveSDL3", targets: ["ShockwaveSDL3"])
     ],
     dependencies: [
         .package(url: "https://github.com/MillerTechnologyPeru/swift-lingo", branch: "master"),
@@ -40,6 +41,20 @@ let package = Package(
                 .product(name: "LingoRuntime", package: "swift-lingo"),
                 .product(name: "LingoBytecode", package: "swift-lingo"),
                 .product(name: "LingoVM", package: "swift-lingo")
+            ],
+            swiftSettings: [.enableUpcomingFeature("ApproachableConcurrency")]
+        ),
+        .systemLibrary(
+            name: "CSDL3",
+            path: "Sources/CSDL3",
+            pkgConfig: "sdl3",
+            providers: [.brew(["sdl3"])]
+        ),
+        .executableTarget(
+            name: "ShockwaveSDL3",
+            dependencies: [
+                "CSDL3", "ShockwaveFile", "ShockwaveModel", "ShockwavePlayer",
+                .product(name: "LingoRuntime", package: "swift-lingo")
             ],
             swiftSettings: [.enableUpcomingFeature("ApproachableConcurrency")]
         ),
