@@ -43,28 +43,23 @@ final class StageRenderer {
   private func drawSprite(_ record: SpriteChannelRecord, spriteNumber: Int, player: MoviePlayer) {
     var castLib = record.castLib
     var memberNumber = record.member
-    var destination = SDL_FRect(
-      x: Float(record.left), y: Float(record.top),
-      w: Float(record.width), h: Float(record.height))
 
-    // Puppeted overrides: Lingo-set member/loc on the sprite channel win
-    // over the score's record.
-    if let sprite = player.sprite(.integer(spriteNumber)) {
-      if case .object(let memberObject) = sprite.getProperty("member"),
-        let castMember = memberObject as? CastMember,
-        let library = movie.castManager.library(number: castMember.libraryNumber),
-        let fileNumber = library.fileNumber
-      {
-        castLib = fileNumber
-        memberNumber = castMember.memberNumber
-      }
-      if let locH = sprite.getProperty("locH").asInteger(),
-        let locV = sprite.getProperty("locV").asInteger()
-      {
-        destination.x = Float(locH)
-        destination.y = Float(locV)
-      }
+    // Puppeted member override: Lingo-set member on the sprite channel wins
+    // over the score's record. (locH/locV puppet override is applied by
+    // `spriteRect`, shared with hit-testing so the two can't drift.)
+    if let sprite = player.sprite(.integer(spriteNumber)),
+      case .object(let memberObject) = sprite.getProperty("member"),
+      let castMember = memberObject as? CastMember,
+      let library = movie.castManager.library(number: castMember.libraryNumber),
+      let fileNumber = library.fileNumber
+    {
+      castLib = fileNumber
+      memberNumber = castMember.memberNumber
     }
+
+    let rect = player.spriteRect(record, spriteNumber: spriteNumber)
+    var destination = SDL_FRect(
+      x: Float(rect.left), y: Float(rect.top), w: Float(rect.width), h: Float(rect.height))
 
     guard let member = movie.castManager.library(fileNumber: castLib)?.member(memberNumber),
       let properties = member.chunk.bitmapProperties
