@@ -152,6 +152,81 @@ private func realMovieData() throws -> Data {
   #expect(config.rawData.count == 84)
 }
 
+@Test func realMovieCastListParses() throws {
+  let file = try RIFXFile.read(from: realMovieData())
+  let castList = try #require(try file.castList())
+  #expect(
+    castList.entries.map(\.name) == [
+      "Internal", "legoparts", "catalog", "editor", "play", "peter 101", "sound",
+      "levels", "dynamic", "unused levels", "screens_by_peter", "backgrounds", "loading",
+    ])
+  #expect(castList.entries.allSatisfy { $0.filePath.isEmpty })
+  #expect(castList.entries.allSatisfy { $0.preloadMode == 0 })
+
+  let internalCast = castList.entries[0]
+  #expect(internalCast.resourceId == nil)
+
+  let legoparts = castList.entries[1]
+  #expect(legoparts.minMember == 1)
+  #expect(legoparts.maxMember == 44)
+  #expect(legoparts.resourceId == 0x10400)
+}
+
+@Test func realMovieCastTableJoinsThroughKeyTable() throws {
+  let file = try RIFXFile.read(from: realMovieData())
+  let castList = try #require(try file.castList())
+  let keyTable = try #require(try file.keyTable())
+  let legoparts = castList.entries[1]
+
+  let tableEntry = try #require(
+    keyTable.entries.first {
+      $0.fourCC == "CAS*" && $0.ownerChunkIndex == legoparts.resourceId
+    })
+  let table = try file.castTable(at: file.chunkMap[tableEntry.childChunkIndex])
+  #expect(table.memberIds.count == 44)
+  #expect(table.memberIds.allSatisfy { $0 != 0 })
+  #expect(table.memberIds.first == 344)
+  #expect(table.memberIds.allSatisfy { file.chunkMap[$0].fourCC == "CASt" })
+}
+
+@Test func realMovieCastMemberParses() throws {
+  let file = try RIFXFile.read(from: realMovieData())
+  let member = try file.castMember(at: file.chunkMap[344])
+  #expect(member.type == .script)
+  #expect(member.name == "main")
+  #expect(member.scriptId == 25)
+  #expect(member.specificData == Data([0x00, 0x03]))  // movie script
+
+  let scriptText = try #require(member.scriptText)
+  #expect(scriptText.count == 3611)
+  #expect(scriptText.hasPrefix("global glob, version"))
+  let digest = SHA256.hash(data: Data(scriptText.utf8))
+  let digestHex = digest.map { String(format: "%02x", $0) }.joined()
+  #expect(digestHex == "470f69e971ab54162081659b5f10dc5205d3495548f6f9e8914712cb1a13dd10")
+}
+
+@Test func realMovieCastMemberNamesAreStable() throws {
+  let file = try RIFXFile.read(from: realMovieData())
+  let castList = try #require(try file.castList())
+  let keyTable = try #require(try file.keyTable())
+  let legoparts = castList.entries[1]
+  let tableEntry = try #require(
+    keyTable.entries.first {
+      $0.fourCC == "CAS*" && $0.ownerChunkIndex == legoparts.resourceId
+    })
+  let table = try file.castTable(at: file.chunkMap[tableEntry.childChunkIndex])
+
+  var names: [String] = []
+  for memberId in table.memberIds {
+    let member = try file.castMember(at: file.chunkMap[memberId])
+    names.append(member.name ?? "")
+  }
+  #expect(names.prefix(3) == ["main", "Display Text", "Tooltip"])
+  let digest = SHA256.hash(data: Data(names.joined(separator: "\n").utf8))
+  let digestHex = digest.map { String(format: "%02x", $0) }.joined()
+  #expect(digestHex == "045f0a64127ba6ee7be077a4b44f55ed21e0188106cce68f6d9dbb0d9fa2c235")
+}
+
 @Test func realShockwaveMovieIsDetectedAsCompressed() throws {
   let url = try #require(
     Bundle.module.url(
