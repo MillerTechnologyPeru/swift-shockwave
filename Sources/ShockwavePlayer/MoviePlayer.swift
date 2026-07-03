@@ -5,16 +5,27 @@ import ShockwaveModel
 
 /// The `LingoVMHost` conformance bridging a loaded `Movie` into `LingoVM`:
 /// resolves members and sprites, instantiates parent scripts, registers
-/// every movie-script handler as a global so cross-script calls work, and
-/// provides the handful of player built-ins (`put`, `marker`, `go`) headless
-/// execution needs. The frame loop is a later phase.
+/// every movie-script handler as a global so cross-script calls work,
+/// provides the player built-ins (`put`, `marker`, `go`, ...) headless
+/// execution needs, and runs the frame loop (`start`/`step`/`jump`).
 public final class MoviePlayer: LingoVMHost {
   public let movieModel: Movie
   /// Everything `put` writes, in order — the headless stand-in for the
   /// message window.
   public private(set) var transcript: [String] = []
 
+  /// The frame the playhead is on; 0 before `start()`.
+  public internal(set) var currentFrame = 0
+  /// Where `go(...)` told the playhead to continue after the current frame
+  /// finishes; `nil` means fall through to the next frame.
+  public internal(set) var nextFrame: Int?
+  public internal(set) var isPlaying = false
+
   private var sprites: [Int: Sprite] = [:]
+  /// Live behavior instances for the spans covering `currentFrame`, keyed
+  /// by span index in `score.spans`.
+  var activeSpans: [Int: [ScriptInstance]] = [:]
+  var movieHandlerNames: Set<String> = []
 
   public init(movie: Movie) {
     self.movieModel = movie
@@ -103,6 +114,7 @@ public final class MoviePlayer: LingoVMHost {
         guard let chunk = member.scriptChunk else { continue }
         for handler in chunk.handlers {
           guard let handlerName = member.scriptNames[safe: Int(handler.nameId)] else { continue }
+          movieHandlerNames.insert(handlerName.asciiLowercased())
           movieModel.lingoEnvironment.registerGlobalFunction(handlerName) {
             [weak self] args in
             guard let self else { return .void }
@@ -160,13 +172,27 @@ public final class MoviePlayer: LingoVMHost {
       guard let self, let target = args.first else { return .void }
       switch target {
       case .integer(let frame):
-        self.movieModel.setProperty("frame", value: .integer(frame))
+        self.nextFrame = frame
       case .string(let name), .symbol(let name):
         if let frame = self.movieModel.score?.frame(labeled: name) {
-          self.movieModel.setProperty("frame", value: .integer(frame))
+          self.nextFrame = frame
         }
       default:
         break
+      }
+      return .void
+    }
+    environment.registerGlobalFunction("sendAllSprites") { [weak self] args in
+      guard let self, let event = args.first else { return .void }
+      let name: String
+      switch event {
+      case .symbol(let value), .string(let value): name = value
+      default: return .void
+      }
+      for (_, instances) in self.activeSpans.sorted(by: { $0.key < $1.key }) {
+        for instance in instances where instance.handler(named: name) != nil {
+          _ = instance.callMethod(name, args: [.object(instance)] + Array(args.dropFirst()))
+        }
       }
       return .void
     }
