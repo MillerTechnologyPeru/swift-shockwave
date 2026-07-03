@@ -28,8 +28,8 @@ public struct MemoryMapChunk: Sendable {
 
   public init(parsing input: inout ParserSpan, byteOrder: Endianness) throws(any Error) {
     let headerStart = input.startPosition
-    let headerLength = try Int(parsing: &input, storedAs: UInt32.self, endianness: byteOrder)
-    let entrySize = try Int(parsing: &input, storedAs: UInt32.self, endianness: byteOrder)
+    let headerLength = try Int(parsing: &input, storedAs: UInt16.self, endianness: byteOrder)
+    let entrySize = try Int(parsing: &input, storedAs: UInt16.self, endianness: byteOrder)
     let _ = try Int(parsing: &input, storedAs: UInt32.self, endianness: byteOrder)  // entryCountMax
     let entryCountUsed = try Int(parsing: &input, storedAs: UInt32.self, endianness: byteOrder)
 
@@ -48,7 +48,7 @@ public struct MemoryMapChunk: Sendable {
     entries.reserveCapacity(entryCountUsed)
     for _ in 0..<entryCountUsed {
       var record = try input.sliceSpan(byteCount: entrySize)
-      let fourCC = try FourCharCode(parsing: &record)
+      let fourCC = try FourCharCode(parsing: &record, byteOrder: byteOrder)
       let length = try Int(parsing: &record, storedAs: UInt32.self, endianness: byteOrder)
       let offset = try Int(parsing: &record, storedAs: UInt32.self, endianness: byteOrder)
       let flags = try UInt32(parsing: &record, endianness: byteOrder)
