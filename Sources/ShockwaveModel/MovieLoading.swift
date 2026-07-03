@@ -24,7 +24,14 @@ extension Movie {
       )
     }
 
-    return Movie(castManager: CastManager(libraries: libraries), environment: environment)
+    var score: Score?
+    if let scoreChunk = try file.score() {
+      let labels = try file.frameLabels()?.labels ?? []
+      score = Score(chunk: scoreChunk, labels: labels)
+    }
+
+    return Movie(
+      castManager: CastManager(libraries: libraries), score: score, environment: environment)
   }
 
   /// Joins a cast library's members to their compiled scripts: `CAS*` gives
