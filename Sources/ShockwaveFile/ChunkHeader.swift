@@ -12,7 +12,7 @@ public struct ChunkHeader: Sendable {
   }
 
   public init(parsing input: inout ParserSpan, byteOrder: Endianness) throws(ParsingError) {
-    tag = try FourCharCode(parsing: &input)
+    tag = try FourCharCode(parsing: &input, byteOrder: byteOrder)
     length = try Int(parsing: &input, storedAs: UInt32.self, endianness: byteOrder)
   }
 }
