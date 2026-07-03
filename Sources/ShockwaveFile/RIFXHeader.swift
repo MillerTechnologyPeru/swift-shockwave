@@ -37,6 +37,6 @@ public struct RIFXHeader: Sendable {
       throw ShockwaveFileError.invalidMagic
     }
     length = try Int(parsing: &input, storedAs: UInt32.self, endianness: byteOrder)
-    formatCode = try FourCharCode(parsing: &input)
+    formatCode = try FourCharCode(parsing: &input, byteOrder: byteOrder)
   }
 }
