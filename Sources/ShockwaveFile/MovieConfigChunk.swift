@@ -39,15 +39,22 @@ public struct MovieConfigChunk: Sendable {
   public var stageRect: DirectorRect
   public var minMember: Int
   public var maxMember: Int
+  /// The movie's authored frame rate (offset 54, fixed across format
+  /// versions despite the branching field layout before it). `0` when the
+  /// chunk is too short to reach that offset (older/truncated files);
+  /// callers should fall back to a default (Director's own default is 30).
+  public var frameRate: Int
   public var rawData: Data
 
   public init(
-    fileVersion: Int, stageRect: DirectorRect, minMember: Int, maxMember: Int, rawData: Data
+    fileVersion: Int, stageRect: DirectorRect, minMember: Int, maxMember: Int, frameRate: Int,
+    rawData: Data
   ) {
     self.fileVersion = fileVersion
     self.stageRect = stageRect
     self.minMember = minMember
     self.maxMember = maxMember
+    self.frameRate = frameRate
     self.rawData = rawData
   }
 
@@ -59,11 +66,13 @@ public struct MovieConfigChunk: Sendable {
     func i16(_ offset: Int) -> Int {
       Int(Int16(bitPattern: UInt16(bytes[offset]) << 8 | UInt16(bytes[offset + 1])))
     }
+    func u16(_ offset: Int) -> Int { Int(bytes[offset]) << 8 | Int(bytes[offset + 1]) }
     self.init(
       fileVersion: Int(bytes[2]) << 8 | Int(bytes[3]),
       stageRect: DirectorRect(top: i16(4), left: i16(6), bottom: i16(8), right: i16(10)),
       minMember: i16(12),
       maxMember: i16(14),
+      frameRate: bytes.count >= 56 ? u16(54) : 0,
       rawData: Data(bytes))
   }
 }
