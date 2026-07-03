@@ -25,6 +25,7 @@ let package = Package(
         .testTarget(
             name: "ShockwaveFileTests",
             dependencies: ["ShockwaveFile"],
+            resources: [.copy("Resources")],
             swiftSettings: [.enableUpcomingFeature("ApproachableConcurrency")]
         )
     ]

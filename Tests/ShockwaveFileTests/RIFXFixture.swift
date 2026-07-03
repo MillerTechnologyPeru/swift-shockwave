@@ -15,7 +15,12 @@ enum RIFXFixture {
       let v = bigEndian ? value.bigEndian : value.littleEndian
       return withUnsafeBytes(of: v) { Array($0) }
     }
-    func tag(_ s: String) -> [UInt8] { Array(s.utf8) }
+    // Tags follow the container byte order, so a little-endian file stores
+    // them byte-reversed ("pami" for "imap").
+    func tag(_ s: String) -> [UInt8] {
+      let bytes = Array(s.utf8)
+      return bigEndian ? bytes : bytes.reversed()
+    }
     func chunk(_ tagString: String, _ payload: [UInt8]) -> [UInt8] {
       var bytes = tag(tagString)
       bytes += u32(UInt32(payload.count))
@@ -29,15 +34,25 @@ enum RIFXFixture {
     let imapChunkSize = 8 + imapPayload.count
     let mmapOffset = headerSize + imapChunkSize
 
-    var lnamPayload = u32(0) + u32(0) + u16(2) + u16(0)
+    // Lingo chunk payloads are always big-endian, independent of the
+    // container byte order.
+    func be32(_ value: UInt32) -> [UInt8] { withUnsafeBytes(of: value.bigEndian) { Array($0) } }
+    func be16(_ value: UInt16) -> [UInt8] { withUnsafeBytes(of: value.bigEndian) { Array($0) } }
+
+    var lnamNames: [UInt8] = []
     for name in ["a", "bb"] {
-      lnamPayload += [UInt8(name.utf8.count)] + Array(name.utf8)
+      lnamNames += [UInt8(name.utf8.count)] + Array(name.utf8)
     }
+    let lnamPayloadSize = 20 + lnamNames.count
+    var lnamPayload = be32(0) + be32(0)
+    lnamPayload += be32(UInt32(lnamPayloadSize)) + be32(UInt32(lnamPayloadSize))
+    lnamPayload += be16(20) + be16(2)  // namesOffset, count
+    lnamPayload += lnamNames
 
     var keyPayload = u16(12) + u16(0) + u32(1) + u32(1)
     keyPayload += u32(2) + u32(1) + tag("Lnam")  // Lnam (index 2) owned by mmap (index 1)
 
-    let mmapPayloadHeaderSize = 16
+    let mmapPayloadHeaderSize = 24
     let entrySize = 20
     let entryCount = 4
     let mmapPayloadSize = mmapPayloadHeaderSize + entrySize * entryCount
@@ -54,14 +69,15 @@ enum RIFXFixture {
     func entry(_ tagString: String, length: Int, offset: Int) -> [UInt8] {
       tag(tagString) + u32(UInt32(length)) + u32(UInt32(offset)) + u32(0) + u32(0)
     }
-    var mmapPayload = u32(UInt32(mmapPayloadHeaderSize)) + u32(UInt32(entrySize))
+    var mmapPayload = u16(UInt16(mmapPayloadHeaderSize)) + u16(UInt16(entrySize))
     mmapPayload += u32(UInt32(entryCount)) + u32(UInt32(entryCount))
+    mmapPayload += u32(0xFFFF_FFFF) + u32(0xFFFF_FFFF) + u32(0)  // junk/unknown/free pointers
     mmapPayload += entry("imap", length: imapPayload.count, offset: headerSize)
     mmapPayload += entry("mmap", length: mmapPayloadSize, offset: mmapOffset)
     mmapPayload += entry("Lnam", length: lnamPayload.count, offset: lnamOffset)
     mmapPayload += entry("KEY*", length: keyPayload.count, offset: keyOffset)
 
-    var file = tag(bigEndian ? "RIFX" : "XFIR")
+    var file = tag("RIFX")  // reversed to "XFIR" when little-endian
     file += u32(UInt32(totalSize - 8))
     file += tag("MV93")
     file += chunk("imap", imapPayloadFinal)
@@ -78,6 +94,7 @@ enum RIFXFixture {
   /// way it expects.
   static func makeWithScriptContext() -> (bytes: [UInt8], lctxEntryIndex: Int) {
     func u32(_ value: UInt32) -> [UInt8] { withUnsafeBytes(of: value.bigEndian) { Array($0) } }
+    func u16(_ value: UInt16) -> [UInt8] { withUnsafeBytes(of: value.bigEndian) { Array($0) } }
     func tag(_ s: String) -> [UInt8] { Array(s.utf8) }
     func chunk(_ tagString: String, _ payload: [UInt8]) -> [UInt8] {
       var bytes = tag(tagString)
@@ -119,7 +136,7 @@ enum RIFXFixture {
 
     let entrySize = 20
     let entryCount = 3
-    let mmapPayloadHeaderSize = 16
+    let mmapPayloadHeaderSize = 24
     let mmapPayloadSize = mmapPayloadHeaderSize + entrySize * entryCount
     let mmapChunkSize = 8 + mmapPayloadSize
     let lctxOffset = mmapOffset + mmapChunkSize
@@ -127,8 +144,9 @@ enum RIFXFixture {
     func entry(_ tagString: String, length: Int, offset: Int) -> [UInt8] {
       tag(tagString) + u32(UInt32(length)) + u32(UInt32(offset)) + u32(0) + u32(0)
     }
-    var mmapPayload = u32(UInt32(mmapPayloadHeaderSize)) + u32(UInt32(entrySize))
+    var mmapPayload = u16(UInt16(mmapPayloadHeaderSize)) + u16(UInt16(entrySize))
     mmapPayload += u32(UInt32(entryCount)) + u32(UInt32(entryCount))
+    mmapPayload += u32(0xFFFF_FFFF) + u32(0xFFFF_FFFF) + u32(0)  // junk/unknown/free pointers
     mmapPayload += entry("imap", length: imapPayload.count, offset: headerSize)
     mmapPayload += entry("mmap", length: mmapPayloadSize, offset: mmapOffset)
     mmapPayload += entry("Lctx", length: lctxPayload.count, offset: lctxOffset)

@@ -43,6 +43,50 @@ import Testing
   #expect(try file.movieConfig() == nil)
 }
 
+private func realMovieData() throws -> Data {
+  let url = try #require(
+    Bundle.module.url(
+      forResource: "junkbot2_13g_asp", withExtension: "dir", subdirectory: "Resources"))
+  return try Data(contentsOf: url)
+}
+
+@Test func realMovieParsesHeader() throws {
+  let file = try RIFXFile.read(from: realMovieData())
+  #expect(file.header.byteOrder.isLittleEndian)
+  #expect(file.header.formatCode == "MV93")
+}
+
+@Test func realMovieChunkMapWalks() throws {
+  let file = try RIFXFile.read(from: realMovieData())
+  #expect(!file.chunkMap.isEmpty)
+  #expect(!file.entries(fourCC: "Lscr").isEmpty)
+  #expect(!file.entries(fourCC: "CASt").isEmpty)
+  #expect(file.entries(fourCC: "VWSC").count == 1)  // score
+}
+
+@Test func realMovieNameTableResolves() throws {
+  let file = try RIFXFile.read(from: realMovieData())
+  let names = try #require(try file.nameTable())
+  #expect(!names.names.isEmpty)
+  #expect(names.names.allSatisfy { !$0.isEmpty })
+  #expect(names.names.contains("prepareMovie"))
+  #expect(names.names.contains("startMovie"))
+}
+
+@Test func realMovieKeyTableResolves() throws {
+  let file = try RIFXFile.read(from: realMovieData())
+  let keyTable = try #require(try file.keyTable())
+  #expect(!keyTable.entries.isEmpty)
+}
+
+@Test func realMovieScriptContextBridges() throws {
+  let file = try RIFXFile.read(from: realMovieData())
+  let entry = try #require(file.entries(fourCC: "Lctx").first)
+  let context = try file.scriptContext(at: entry)
+  #expect(context.entryCount > 0)
+  #expect(context.sectionMap.count == Int(context.entryCount))
+}
+
 @Test func scriptContextBridgesToLingoBytecode() throws {
   let (bytes, lctxEntryIndex) = RIFXFixture.makeWithScriptContext()
   let file = try RIFXFile.read(from: Data(bytes))
