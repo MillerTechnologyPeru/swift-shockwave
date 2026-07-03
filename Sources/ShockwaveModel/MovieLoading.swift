@@ -30,11 +30,13 @@ extension Movie {
       score = Score(chunk: scoreChunk, labels: labels)
     }
 
-    let fileVersion = try file.movieConfig()?.fileVersion ?? 0
+    let config = try file.movieConfig()
+    let fileVersion = config?.fileVersion ?? 0
+    let frameRate = config?.frameRate ?? 0
 
     return Movie(
       castManager: CastManager(libraries: libraries), score: score, fileVersion: fileVersion,
-      environment: environment)
+      frameRate: frameRate, environment: environment)
   }
 
   /// Joins a cast library's members to their compiled scripts: `CAS*` gives
