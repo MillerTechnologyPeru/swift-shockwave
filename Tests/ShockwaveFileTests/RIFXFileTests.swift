@@ -148,6 +148,82 @@ private func realMovieData() throws -> Data {
   let file = try RIFXFile.read(from: realMovieData())
   let config = try #require(try file.movieConfig())
   #expect(config.rawData.count == 84)
+  #expect(config.fileVersion == 0x640)
+  #expect(config.stageRect == DirectorRect(top: 50, left: 5, bottom: 470, right: 655))
+  #expect(config.stageRect.width == 650)
+  #expect(config.stageRect.height == 420)
+  #expect(config.minMember == 1)
+  #expect(config.maxMember == 44)
+}
+
+@Test func realMovieBitmapPropertiesParse() throws {
+  let file = try RIFXFile.read(from: realMovieData())
+  // legoparts member 12 "grab cursor": chunk map id known from CAS*.
+  let castList = try #require(try file.castList())
+  let keyTable = try #require(try file.keyTable())
+  let legoparts = castList.entries[1]
+  let tableEntry = try #require(
+    keyTable.entries.first {
+      $0.fourCC == "CAS*" && $0.ownerChunkIndex == legoparts.resourceId
+    })
+  let table = try file.castTable(at: file.chunkMap[tableEntry.childChunkIndex])
+  let member = try file.castMember(at: file.chunkMap[table.memberIds[0]])
+  #expect(member.bitmapProperties == nil)  // "main" is a script
+
+  // First bitmap in the whole map: chunkMap[9], "brick_slickJump_dormant_1".
+  let brick = try file.castMember(at: file.chunkMap[9])
+  let properties = try #require(brick.bitmapProperties)
+  #expect(properties.rowBytes == 42)
+  #expect(properties.bounds == DirectorRect(top: 0, left: 0, bottom: 29, right: 41))
+  #expect(properties.regY == 29)  // game pieces register bottom-left
+  #expect(properties.regX == 0)
+  #expect(properties.bitsPerPixel == 8)
+  #expect(properties.paletteCastLib == -1)
+  #expect(properties.paletteMember == -7)
+  #expect(properties.decodedByteCount == 1218)
+}
+
+@Test func realMovieBitmapDataDecodesForEveryBitmap() throws {
+  let file = try RIFXFile.read(from: realMovieData())
+  let keyTable = try #require(try file.keyTable())
+  var bitmapOwners: [Int: Int] = [:]  // owner CASt id -> BITD id
+  for entry in keyTable.entries
+  where entry.fourCC == "BITD" && entry.childChunkIndex < file.chunkMap.count {
+    bitmapOwners[entry.ownerChunkIndex] = entry.childChunkIndex
+  }
+
+  var decoded = 0
+  var raw = 0
+  for (ownerId, bitdId) in bitmapOwners {
+    guard ownerId >= 0, ownerId < file.chunkMap.count,
+      file.chunkMap[ownerId].fourCC == "CASt"
+    else { continue }
+    let member = try file.castMember(at: file.chunkMap[ownerId])
+    guard let properties = member.bitmapProperties else { continue }
+    let data = try file.chunkData(at: file.chunkMap[bitdId])
+    let pixels = try #require(
+      BitmapData.decode(data, expectedByteCount: properties.decodedByteCount),
+      "bitmap \(ownerId) failed to decode")
+    #expect(pixels.count == properties.decodedByteCount)
+    if data.count == properties.decodedByteCount { raw += 1 } else { decoded += 1 }
+  }
+  #expect(decoded == 1054)
+  #expect(raw == 31)
+}
+
+@Test func paletteChunkParsesColors() throws {
+  // No CLUT members exist in the junkbot sample (it uses built-in
+  // palettes only), so this exercises the parser on synthetic bytes.
+  let bytes: [UInt8] = [
+    0xFF, 0x00, 0x80, 0x00, 0x00, 0x00,  // red-ish
+    0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00,  // green
+  ]
+  let palette = try bytes.withParserSpan { span in
+    try PaletteChunk(parsing: &span)
+  }
+  #expect(palette.colors.count == 2)
+  #expect(palette.colors[0] == PaletteChunk.Color(red: 0xFF, green: 0x80, blue: 0x00))
+  #expect(palette.colors[1] == PaletteChunk.Color(red: 0x00, green: 0xFF, blue: 0x00))
 }
 
 @Test func realMovieCastListParses() throws {
