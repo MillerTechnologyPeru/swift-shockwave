@@ -3,6 +3,13 @@ import BinaryParsing
 /// The top-level 12-byte RIFX container header: byte-order magic, overall
 /// file length, and a form type identifying the kind of Director file
 /// (`MV93` for a movie, `FGDC`/`FGDM` for an external cast, ...).
+///
+/// Only plain, uncompressed RIFX is handled here — the container format
+/// behind `.dir`, `.cst`, and their locked-from-editing `.dxr`/`.cxt`
+/// counterparts. `.dcr`/`.cct` (Shockwave-for-web) files use a different,
+/// Afterburner-compressed envelope instead of RIFX; parsing one throws
+/// `ShockwaveFileError.compressedContainerUnsupported` as soon as its `Fver`
+/// magic is seen.
 public struct RIFXHeader: Sendable {
   public static let byteCount = 12
 
