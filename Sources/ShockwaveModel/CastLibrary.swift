@@ -6,6 +6,11 @@ import ShockwaveFile
 /// blank slots).
 public final class CastLibrary: LingoObject {
   public let number: Int
+  /// The file-internal library number (`CastListEntry.resourceId >> 16`) that
+  /// `Sord` and score behavior references use as their `castLib`, or `nil`
+  /// for the internal cast, which has no resource id. Distinct from `number`,
+  /// the 1-based `MCsL` position that Lingo's `castLib` numbering follows.
+  public let fileNumber: Int?
   public let libraryName: String
   public let filePath: String
   public let preloadMode: Int
@@ -18,6 +23,7 @@ public final class CastLibrary: LingoObject {
     environment: LingoEnvironment
   ) {
     self.number = number
+    self.fileNumber = entry.resourceId.map { $0 >> 16 }
     self.libraryName = entry.name
     self.filePath = entry.filePath
     self.preloadMode = Int(entry.preloadMode ?? 0)
