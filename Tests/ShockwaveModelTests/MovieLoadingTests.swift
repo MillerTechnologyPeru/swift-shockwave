@@ -118,6 +118,14 @@ private func realMovie() throws -> Movie {
   #expect(score.spans.count == 431)
 }
 
+@Test func movieFrameRateDecodesFromConfigChunk() throws {
+  // The config chunk's frame_rate field (offset 54) — junkbot.dir is
+  // authored at a flat 15fps with no per-frame tempo channel overrides.
+  let movie = try realMovie()
+  #expect(movie.frameRate == 15)
+  #expect(movie.score?.frameTempo(at: 1) == nil)
+}
+
 @Test func frameBehaviorsResolveToCastMembers() throws {
   let movie = try realMovie()
   let score = try #require(movie.score)
