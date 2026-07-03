@@ -110,6 +110,10 @@ final class StageRenderer {
       _ = SDL_UpdateTexture(texture, nil, buffer.baseAddress, width * 4)
     }
     SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND)
+    // Point-scale, not bilinear: this is pixel art, and several sprites are
+    // placed at many times their native size (e.g. a 12×15 icon stretched
+    // to 136×30), where linear filtering smears into color noise.
+    SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST)
     result = texture
     return texture
   }
