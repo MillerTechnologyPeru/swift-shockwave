@@ -1,4 +1,5 @@
 import LingoRuntime
+import ShockwaveFile
 
 /// Owns every cast library in a movie and resolves member lookups across
 /// them, mirroring Lingo's `member(number, castLib)` resolution order.
@@ -15,6 +16,16 @@ public final class CastManager {
 
   public func library(named name: String) -> CastLibrary? {
     libraries.first { $0.libraryName.caseInsensitiveEquals(name) }
+  }
+
+  /// Resolves the file-internal library numbering used by `Sord` entries and
+  /// score behavior references (`CastLibrary.fileNumber`).
+  public func library(fileNumber: Int) -> CastLibrary? {
+    libraries.first { $0.fileNumber == fileNumber }
+  }
+
+  public func member(_ reference: ScoreChunk.BehaviorReference) -> CastMember? {
+    library(fileNumber: reference.castLib)?.member(reference.member)
   }
 
   /// Looks up a member by number, optionally scoped to one library. With no
