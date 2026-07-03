@@ -109,6 +109,12 @@ extension RIFXFile {
     }
   }
 
+  public func script(at entry: ChunkMapEntry) throws -> ScriptChunk {
+    try withPayloadSpan(of: entry) { payload in
+      try ScriptChunk.read(from: payload)
+    }
+  }
+
   public func castList() throws -> CastListChunk? {
     guard let entry = entries(fourCC: "MCsL").first else { return nil }
     return try withPayloadSpan(of: entry) { payload in
