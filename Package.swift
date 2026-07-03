@@ -8,10 +8,11 @@ let package = Package(
     ],
     products: [
         .library(name: "ShockwaveFile", targets: ["ShockwaveFile"]),
-        .library(name: "ShockwaveModel", targets: ["ShockwaveModel"])
+        .library(name: "ShockwaveModel", targets: ["ShockwaveModel"]),
+        .library(name: "ShockwavePlayer", targets: ["ShockwavePlayer"])
     ],
     dependencies: [
-        .package(url: "https://github.com/MillerTechnologyPeru/swift-lingo", from: "0.2.1"),
+        .package(url: "https://github.com/MillerTechnologyPeru/swift-lingo", branch: "master"),
         .package(url: "https://github.com/apple/swift-binary-parsing", from: "0.0.1")
     ],
     targets: [
@@ -23,12 +24,6 @@ let package = Package(
             ],
             swiftSettings: [.enableUpcomingFeature("ApproachableConcurrency")]
         ),
-        .testTarget(
-            name: "ShockwaveFileTests",
-            dependencies: ["ShockwaveFile"],
-            resources: [.copy("Resources")],
-            swiftSettings: [.enableUpcomingFeature("ApproachableConcurrency")]
-        ),
         .target(
             name: "ShockwaveModel",
             dependencies: [
@@ -38,14 +33,43 @@ let package = Package(
             ],
             swiftSettings: [.enableUpcomingFeature("ApproachableConcurrency")]
         ),
+        .target(
+            name: "ShockwavePlayer",
+            dependencies: [
+                "ShockwaveFile", "ShockwaveModel",
+                .product(name: "LingoRuntime", package: "swift-lingo"),
+                .product(name: "LingoBytecode", package: "swift-lingo"),
+                .product(name: "LingoVM", package: "swift-lingo")
+            ],
+            swiftSettings: [.enableUpcomingFeature("ApproachableConcurrency")]
+        ),
+        .target(
+            name: "ShockwaveTestSupport",
+            path: "Tests/ShockwaveTestSupport",
+            resources: [.copy("Resources")],
+            swiftSettings: [.enableUpcomingFeature("ApproachableConcurrency")]
+        ),
+        .testTarget(
+            name: "ShockwaveFileTests",
+            dependencies: ["ShockwaveFile", "ShockwaveTestSupport"],
+            swiftSettings: [.enableUpcomingFeature("ApproachableConcurrency")]
+        ),
         .testTarget(
             name: "ShockwaveModelTests",
             dependencies: [
-                "ShockwaveModel", "ShockwaveFile",
+                "ShockwaveModel", "ShockwaveFile", "ShockwaveTestSupport",
                 .product(name: "LingoRuntime", package: "swift-lingo"),
                 .product(name: "LingoBytecode", package: "swift-lingo")
             ],
-            resources: [.copy("Resources")],
+            swiftSettings: [.enableUpcomingFeature("ApproachableConcurrency")]
+        ),
+        .testTarget(
+            name: "ShockwavePlayerTests",
+            dependencies: [
+                "ShockwavePlayer", "ShockwaveModel", "ShockwaveFile", "ShockwaveTestSupport",
+                .product(name: "LingoRuntime", package: "swift-lingo"),
+                .product(name: "LingoVM", package: "swift-lingo")
+            ],
             swiftSettings: [.enableUpcomingFeature("ApproachableConcurrency")]
         )
     ]
