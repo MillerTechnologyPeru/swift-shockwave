@@ -9,6 +9,9 @@ public final class Movie: LingoObject {
   /// The config chunk's file-format version code (e.g. `0x640` for a
   /// Director 7-era file), or 0 when the movie has no config chunk.
   public let fileVersion: Int
+  /// The config chunk's authored frame rate, or 0 when absent/unreadable —
+  /// callers fall back to Director's own default of 30fps.
+  public let frameRate: Int
 
   // `the actorList`, `the exitLock`, `the itemDelimiter`, ... — movie
   // properties scripts read and write freely. Stored permissively rather
@@ -16,12 +19,13 @@ public final class Movie: LingoObject {
   private var dynamicProperties: [String: LingoValue] = [:]
 
   public init(
-    castManager: CastManager, score: Score?, fileVersion: Int = 0,
+    castManager: CastManager, score: Score?, fileVersion: Int = 0, frameRate: Int = 0,
     environment: LingoEnvironment
   ) {
     self.castManager = castManager
     self.score = score
     self.fileVersion = fileVersion
+    self.frameRate = frameRate
     super.init(environment: environment)
   }
 
