@@ -90,7 +90,7 @@ extension RIFXFile {
   public func nameTable() throws -> NameTableChunk? {
     guard let entry = entries(fourCC: "Lnam").first else { return nil }
     return try withPayloadSpan(of: entry) { payload in
-      try NameTableChunk(parsing: &payload, byteOrder: header.byteOrder)
+      try NameTableChunk(parsing: &payload)
     }
   }
 
