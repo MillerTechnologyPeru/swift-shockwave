@@ -30,14 +30,19 @@ extension Movie {
       score = Score(chunk: scoreChunk, labels: labels)
     }
 
+    let fileVersion = try file.movieConfig()?.fileVersion ?? 0
+
     return Movie(
-      castManager: CastManager(libraries: libraries), score: score, environment: environment)
+      castManager: CastManager(libraries: libraries), score: score, fileVersion: fileVersion,
+      environment: environment)
   }
 
   /// Joins a cast library's members to their compiled scripts: `CAS*` gives
   /// the member chunk ids, and each script member's `CASt.scriptId` (a
   /// 1-based index into the cast's `Lctx` section map) resolves through that
-  /// map to the `Lscr` chunk holding its compiled bytecode.
+  /// map to the `Lscr` chunk holding its compiled bytecode. The same `Lctx`
+  /// also points at the cast's own `Lnam` name table, which every script in
+  /// the cast shares.
   private static func loadMembers(
     for entry: CastListEntry,
     libraryNumber: Int,
@@ -53,11 +58,20 @@ extension Movie {
     let castTable = try file.castTable(at: file.chunkMap[castTableRelationship.childChunkIndex])
 
     var sectionMap: [ScriptContextMapEntry] = []
+    var scriptNames: [String] = []
+    var capitalContext = false
     if let lctxRelationship = keyTable?.entries.first(where: {
-      $0.fourCC == "Lctx" && $0.ownerChunkIndex == resourceId
+      ($0.fourCC == "Lctx" || $0.fourCC == "LctX") && $0.ownerChunkIndex == resourceId
     }) {
-      sectionMap = try file.scriptContext(at: file.chunkMap[lctxRelationship.childChunkIndex])
-        .sectionMap
+      capitalContext = lctxRelationship.fourCC == "LctX"
+      let context = try file.scriptContext(at: file.chunkMap[lctxRelationship.childChunkIndex])
+      sectionMap = context.sectionMap
+      let lnamId = Int(context.lnamSectionId)
+      if lnamId >= 0, lnamId < file.chunkMap.count, file.chunkMap[lnamId].fourCC == "Lnam" {
+        scriptNames = try file.withPayloadSpan(of: file.chunkMap[lnamId]) { payload in
+          try NameTableChunk(parsing: &payload).names
+        }
+      }
     }
 
     let firstMemberNumber = entry.minMember ?? 1
@@ -68,7 +82,8 @@ extension Movie {
       let scriptChunk = try loadScriptChunk(for: chunk, sectionMap: sectionMap, file: file)
       members[memberNumber] = CastMember(
         libraryNumber: libraryNumber, memberNumber: memberNumber, chunk: chunk,
-        scriptChunk: scriptChunk, environment: environment)
+        scriptChunk: scriptChunk, scriptNames: scriptNames,
+        scriptUsesCapitalContext: capitalContext, environment: environment)
     }
     return members
   }
