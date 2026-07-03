@@ -4,6 +4,16 @@ import LingoBytecode
 
 /// A parsed RIFX container: the top-level header plus the flat chunk table
 /// resolved by walking `imap` → `mmap`.
+///
+/// This covers the classic, uncompressed RIFX container used by `.dir`
+/// (editable movie), `.cst` (external cast), and `.dxr`/`.cxt` (the same
+/// formats with a "protected"/locked-from-editing flag set, but still plain
+/// RIFX). It does not cover `.dcr`/`.cct` (Shockwave-for-web movie/cast),
+/// which wrap an Afterburner-compressed envelope (`Fver`/`Fcdr`/`ABMP`/`FGEI`)
+/// around a custom bitstream instead of RIFX — `RIFXHeader.init(parsing:)`
+/// detects that envelope's `Fver` magic and throws
+/// `ShockwaveFileError.compressedContainerUnsupported` rather than
+/// misparsing it.
 public struct RIFXFile: Sendable {
   public var header: RIFXHeader
   public var chunkMap: [ChunkMapEntry]
