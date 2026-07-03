@@ -37,7 +37,7 @@ public struct KeyTableChunk: Sendable {
       var record = try input.sliceSpan(byteCount: entrySize)
       let childChunkIndex = try Int(parsing: &record, storedAs: UInt32.self, endianness: byteOrder)
       let ownerChunkIndex = try Int(parsing: &record, storedAs: UInt32.self, endianness: byteOrder)
-      let fourCC = try FourCharCode(parsing: &record)
+      let fourCC = try FourCharCode(parsing: &record, byteOrder: byteOrder)
       entries.append(
         KeyTableEntry(
           childChunkIndex: childChunkIndex, ownerChunkIndex: ownerChunkIndex, fourCC: fourCC))
