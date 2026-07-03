@@ -87,6 +87,16 @@ private func realMovieData() throws -> Data {
   #expect(context.sectionMap.count == Int(context.entryCount))
 }
 
+@Test func realShockwaveMovieIsDetectedAsCompressed() throws {
+  let url = try #require(
+    Bundle.module.url(
+      forResource: "junkbot2_13g_asp", withExtension: "dcr", subdirectory: "Resources"))
+  let data = try Data(contentsOf: url)
+  #expect(throws: ShockwaveFileError.compressedContainerUnsupported) {
+    try RIFXFile.read(from: data)
+  }
+}
+
 @Test func scriptContextBridgesToLingoBytecode() throws {
   let (bytes, lctxEntryIndex) = RIFXFixture.makeWithScriptContext()
   let file = try RIFXFile.read(from: Data(bytes))
