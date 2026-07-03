@@ -70,10 +70,11 @@ enum BitmapConversion {
       for y in 0..<height {
         let row = y * rowBytes
         for x in 0..<width {
+          let a = pixels[row + x]
           let r = pixels[row + width + x]
           let g = pixels[row + width * 2 + x]
           let b = pixels[row + width * 3 + x]
-          write(x, y, r, g, b, 255)
+          write(x, y, r, g, b, a)
         }
       }
     default:
