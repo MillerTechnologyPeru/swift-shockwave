@@ -6,5 +6,7 @@ public enum ShockwaveFileError: Error, Equatable, Sendable {
   /// An offset stored inside a chunk fell outside the file's bounds.
   case invalidOffset(Int)
   /// The container envelope is Afterburner-compressed (`Fver`), which phase 1 doesn't parse.
+  /// This is the format used by Shockwave-for-web `.dcr`/`.cct` files, as opposed to the
+  /// plain-RIFX `.dir`/`.cst`/`.dxr`/`.cxt` files this module does handle.
   case compressedContainerUnsupported
 }
