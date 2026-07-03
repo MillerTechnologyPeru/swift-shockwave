@@ -211,6 +211,30 @@ private func realMovieData() throws -> Data {
   #expect(raw == 31)
 }
 
+@Test func realMovieSpriteRecordsDecode() throws {
+  let file = try RIFXFile.read(from: realMovieData())
+  let score = try #require(try file.score())
+  // Frame 9 ("mainmenu"), sprite 3 (channel 8): one of a row of menu
+  // buttons — same V, marching H, size matching its member's bounds.
+  let frame = score.frames[8]
+  let record = try #require(frame.spriteRecord(channel: 8))
+  #expect(record.ink == 8)  // matte
+  #expect(record.castLib == 13)
+  #expect(record.member == 22)
+  #expect(record.top == 170)
+  #expect(record.left == 56)
+  #expect(record.height == 37)
+  #expect(record.width == 45)
+
+  let neighbor = try #require(frame.spriteRecord(channel: 9))
+  #expect(neighbor.top == 170)
+  #expect(neighbor.left == 107)
+  #expect((neighbor.height, neighbor.width) == (37, 45))
+
+  // Untouched sprite channels decode to nil.
+  #expect(frame.spriteRecord(channel: 900) == nil)
+}
+
 @Test func paletteChunkParsesColors() throws {
   // No CLUT members exist in the junkbot sample (it uses built-in
   // palettes only), so this exercises the parser on synthetic bytes.
