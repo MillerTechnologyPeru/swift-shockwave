@@ -86,8 +86,11 @@ private func realMovie() throws -> Movie {
 
 @Test func castWithNoScriptsLoadsWithoutError() throws {
   // "catalog"'s Lctx stores entryCount == 0 with entriesOffset pointing
-  // exactly at the chunk's end (a valid empty section map) — the case
-  // `Movie.load` works around in `ScriptContextChunk.read`'s off-by-one.
+  // exactly at the chunk's end — a valid empty section map, since nothing
+  // is ever read from a one-past-the-end offset. Regression coverage for
+  // `ScriptContextChunk.read`'s off-by-one lives in swift-lingo itself
+  // (`scriptContextChunkWithNoEntriesAtChunkEnd`); this pins the same case
+  // end-to-end through `Movie.load`.
   let movie = try realMovie()
   let catalog = try #require(movie.castManager.library(named: "catalog"))
   #expect(catalog.memberCount == 36)
