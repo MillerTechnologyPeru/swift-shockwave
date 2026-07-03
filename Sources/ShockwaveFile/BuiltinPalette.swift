@@ -33,11 +33,24 @@ public enum BuiltinPalette {
     return PaletteChunk.Color(red: value, green: value, blue: value)
   }
 
-  /// Resolves a built-in palette member id (negative, e.g. `-1` for the
-  /// Mac system palette) to a color table.
+  /// Approximation of Director's built-in "Metallic" palette (id 7 in its
+  /// standard list: System-Mac, Rainbow, Grayscale, Pastels, Vivid, NTSC,
+  /// Metallic, System-Win — referenced here as member id `-7`). No
+  /// independently-published exact table is available, so this is a
+  /// smooth silver/gray gradient rather than a verified reproduction —
+  /// visually closer than the system-color cube, not colorimetrically
+  /// exact.
+  public static let metallic: [PaletteChunk.Color] = (0..<256).map { index in
+    let value = UInt8(255 - index)
+    return PaletteChunk.Color(red: value, green: value, blue: UInt8(min(255, Int(value) + 8)))
+  }
+
+  /// Resolves a built-in palette member id (negative — e.g. `-101` for the
+  /// classic Mac system palette, `-7` for Metallic) to a color table.
   public static func colors(forMember member: Int) -> [PaletteChunk.Color] {
     switch member {
     case -3: return grayscale
+    case -7: return metallic
     default: return macSystem
     }
   }
