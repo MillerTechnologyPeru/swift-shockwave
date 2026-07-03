@@ -2,7 +2,7 @@
 
 ## Context
 
-`swift-shockwave` is an MIT-licensed Swift library for Adobe Director/Shockwave files. The goal is a **clean-room** implementation of the non-rendering parts of a Director/Shockwave player: RIFX file parsing, the cast/score/movie data model, and wiring that model up to run Lingo scripts. Actual rendering (2D bitmap compositing, 3D, GPU work) is explicitly out of scope for this repo — it belongs in a separate, later project layered on top.
+`swift-shockwave` is an MIT-licensed Swift library for Adobe Director/Shockwave files. The goal is a **clean-room** implementation of a Director/Shockwave player: RIFX file parsing, the cast/score/movie data model, wiring that model up to run Lingo scripts, and (post-v1, amended from the original plan) a minimal SDL3-based renderer in the `ShockwaveSDL3` executable target. 3D, Xtras, and font rasterization remain out of scope.
 
 **Hard constraint**: this must stay a clean-room reimplementation. Do not reference any GPL reference emulator's file paths, module names, or use "ported from"/"based on" language anywhere in code, comments, commit messages, or docs. Implement from an understanding of *behavior* (the RIFX container format, Director's chunk types, Lingo semantics — all independently documented/reverse-engineered knowledge), never by copying or transliterating GPL source. This mirrors a standing rule already followed in the sibling `swift-lingo` repo.
 
@@ -58,7 +58,15 @@ A SwiftPM package depending on `swift-lingo` (`LingoRuntime`, `LingoBytecode`, `
 3. **Score chunk + model**: score/score-order/frame-label chunk parsing → `Score`/`Sprite` timeline runtime types (no geometry/rendering).
 4. **`LingoVMHost` conformance**: bridge the real model into `LingoVM`; first successful `LingoVM.call` against a real movie's real handler.
 5. **Frame loop + event dispatch**: frame advance, `enterFrame`/`mouseUp` dispatch order, `go()` command — enough to run a movie headlessly end-to-end and observe Lingo side effects.
-6. **Explicitly out of scope for this repo** (belongs in a later, separate rendering-focused project): 2D bitmap rendering/compositing, sound playback, Xtras (file I/O, networking, system menu, XML parsing, external plugin hosting), 3D, font rasterization, multiuser networking.
+6. ~~Explicitly out of scope for this repo~~ *(amended post-v1)*: 2D rendering moved in-repo — see post-v1 roadmap below. Still out of scope: Xtras (file I/O, networking, system menu, XML parsing, external plugin hosting), 3D, font rasterization, multiuser networking.
+
+## Post-v1 roadmap (phases 1–5 complete)
+
+1. **Bitmap pipeline** (`ShockwaveFile`): `DRCF` stage rect, bitmap `CASt` specific-data (rowBytes/rect/regPoint/depth/palette), `CLUT` palettes + built-in system palettes, `BITD` RLE decode — each validated against the junkbot sample's real bitmaps.
+2. **`ShockwaveSDL3` executable**: `CSDL3` system-library target; stage-sized window → cast bitmap viewer → sprite compositing at score tempo (puppeted sprites read from the player's `Sprite` property bags; copy ink first) → SDL mouse/keyboard events into `MoviePlayer.dispatch`.
+3. **Score sprite-record field decode** — needs a sample movie that places sprites in the score (junkbot puppets everything).
+4. **Afterburner (`.dcr`/`.cct`)**: `Fver`/`Fcdr`/`ILS `/`ABMP`/`FGEI` envelope + per-chunk zlib.
+5. **Player depth as movies demand it**: `puppetSprite`/`updateStage`/`cursor`/timers/`the key`, `the actorList` + `stepFrame`, behavior initial values from score tertiary entries, `pass`/`stopEvent`, MacRoman string decoding, sound chunks.
 
 ## Conventions to carry over from `swift-lingo`
 
