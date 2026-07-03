@@ -133,4 +133,25 @@ extension RIFXFile {
       try CastMemberChunk(parsing: &payload)
     }
   }
+
+  public func frameLabels() throws -> FrameLabelsChunk? {
+    guard let entry = entries(fourCC: "VWLB").first else { return nil }
+    return try withPayloadSpan(of: entry) { payload in
+      try FrameLabelsChunk(parsing: &payload)
+    }
+  }
+
+  public func scoreOrder() throws -> ScoreOrderChunk? {
+    guard let entry = entries(fourCC: "Sord").first else { return nil }
+    return try withPayloadSpan(of: entry) { payload in
+      try ScoreOrderChunk(parsing: &payload)
+    }
+  }
+
+  public func score() throws -> ScoreChunk? {
+    guard let entry = entries(fourCC: "VWSC").first else { return nil }
+    return try withPayloadSpan(of: entry) { payload in
+      try ScoreChunk(parsing: &payload)
+    }
+  }
 }
