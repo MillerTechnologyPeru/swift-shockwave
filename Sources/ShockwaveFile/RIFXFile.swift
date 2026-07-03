@@ -154,4 +154,18 @@ extension RIFXFile {
       try ScoreChunk(parsing: &payload)
     }
   }
+
+  /// The raw payload bytes of any chunk — for media chunks (`BITD`, `snd `,
+  /// ...) whose interpretation depends on their owning cast member.
+  public func chunkData(at entry: ChunkMapEntry) throws -> Data {
+    try withPayloadSpan(of: entry) { payload in
+      Data(parsingRemainingBytes: &payload)
+    }
+  }
+
+  public func palette(at entry: ChunkMapEntry) throws -> PaletteChunk {
+    try withPayloadSpan(of: entry) { payload in
+      try PaletteChunk(parsing: &payload)
+    }
+  }
 }
