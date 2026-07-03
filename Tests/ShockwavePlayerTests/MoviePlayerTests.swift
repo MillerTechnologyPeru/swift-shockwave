@@ -70,7 +70,7 @@ private func realPlayer() throws -> MoviePlayer {
   #expect(frame.asInteger() == 9)
 
   player.callHandler("go", args: [.string("play")])
-  #expect(player.movieModel.getProperty("frame").asInteger() == 14)
+  #expect(player.nextFrame == 14)
 }
 
 @Test func prepareMovieRunsAgainstRealModel() throws {
