@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Testing
 
@@ -51,40 +52,104 @@ private func realMovieData() throws -> Data {
 }
 
 @Test func realMovieParsesHeader() throws {
-  let file = try RIFXFile.read(from: realMovieData())
+  let data = try realMovieData()
+  let file = try RIFXFile.read(from: data)
   #expect(file.header.byteOrder.isLittleEndian)
   #expect(file.header.formatCode == "MV93")
+  #expect(file.header.length == 6_368_680)
+  #expect(file.header.length + 8 == data.count)
 }
 
 @Test func realMovieChunkMapWalks() throws {
   let file = try RIFXFile.read(from: realMovieData())
-  #expect(!file.chunkMap.isEmpty)
-  #expect(!file.entries(fourCC: "Lscr").isEmpty)
-  #expect(!file.entries(fourCC: "CASt").isEmpty)
-  #expect(file.entries(fourCC: "VWSC").count == 1)  // score
+  #expect(file.chunkMap.count == 155_336)
+  #expect(file.entries(fourCC: "free").count == 152_456)
+  #expect(file.entries(fourCC: "CASt").count == 1400)
+  #expect(file.entries(fourCC: "BITD").count == 1085)
+  #expect(file.entries(fourCC: "XMED").count == 122)
+  #expect(file.entries(fourCC: "Lscr").count == 114)
+  #expect(file.entries(fourCC: "snd ").count == 39)
+  #expect(file.entries(fourCC: "ediM").count == 23)
+  #expect(file.entries(fourCC: "STXT").count == 18)
+  #expect(file.entries(fourCC: "Lctx").count == 13)
+  #expect(file.entries(fourCC: "Cinf").count == 13)
+  #expect(file.entries(fourCC: "Lnam").count == 13)
+  #expect(file.entries(fourCC: "CAS*").count == 12)
+  #expect(file.entries(fourCC: "SCVW").count == 6)  // film loops
+  #expect(file.entries(fourCC: "VWSC").count == 1)  // the movie score
+  #expect(file.entries(fourCC: "imap").count == 1)
+  #expect(file.entries(fourCC: "mmap").count == 1)
+  #expect(file.entries(fourCC: "KEY*").count == 1)
+  #expect(file.entries(fourCC: "DRCF").count == 1)
 }
 
 @Test func realMovieNameTableResolves() throws {
   let file = try RIFXFile.read(from: realMovieData())
   let names = try #require(try file.nameTable())
-  #expect(!names.names.isEmpty)
-  #expect(names.names.allSatisfy { !$0.isEmpty })
-  #expect(names.names.contains("prepareMovie"))
-  #expect(names.names.contains("startMovie"))
+  #expect(names.names.count == 893)
+  #expect(
+    Array(names.names.prefix(10)) == [
+      "prepareMovie", "startMovie", "movieloaded", "stopMovie", "streamStatus",
+      "keyDown", "gbutton", "do_editor", "do_catalog", "do_player",
+    ])
+  #expect(Array(names.names.suffix(3)) == ["checksum", "checkvalue", "frameLabel"])
+  // Full-table stability pin: any change to Lnam parsing that reorders,
+  // drops, or corrupts names changes this digest.
+  let digest = SHA256.hash(data: Data(names.names.joined(separator: "\n").utf8))
+  let digestHex = digest.map { String(format: "%02x", $0) }.joined()
+  #expect(digestHex == "de8d6e565abb1feb7ab008555df57134604253d0cd1ad8c93b3b0dd888d1b618")
 }
 
 @Test func realMovieKeyTableResolves() throws {
   let file = try RIFXFile.read(from: realMovieData())
   let keyTable = try #require(try file.keyTable())
-  #expect(!keyTable.entries.isEmpty)
+  #expect(keyTable.entries.count == 2647)
+
+  let first = try #require(keyTable.entries.first)
+  #expect(first.childChunkIndex == 152_591)
+  #expect(first.ownerChunkIndex == 9)
+  #expect(first.fourCC == "BITD")
+
+  // 17 entries reference children past the end of the chunk map — dangling
+  // records for deleted chunks (FCOL/GRID/PUBL/SCRF) that Director left in
+  // the key table. Everything else resolves.
+  let dangling = keyTable.entries.filter { $0.childChunkIndex >= file.chunkMap.count }
+  #expect(dangling.count == 17)
+  #expect(dangling.allSatisfy { ["FCOL", "GRID", "PUBL", "SCRF"].contains($0.fourCC.description) })
+
+  // The chunks owned directly by the movie (fixed resource id 1024) are its
+  // movie-level singletons.
+  let movieOwned = keyTable.entries.filter { $0.ownerChunkIndex == 1024 }
+  #expect(
+    movieOwned.map(\.fourCC.description).sorted() == [
+      "DRCF", "FCOL", "FXmp", "GRID", "MCsL", "PUBL", "SCRF",
+      "Sord", "VERS", "VWFI", "VWLB", "VWSC", "XTRl",
+    ])
 }
 
 @Test func realMovieScriptContextBridges() throws {
   let file = try RIFXFile.read(from: realMovieData())
   let entry = try #require(file.entries(fourCC: "Lctx").first)
   let context = try file.scriptContext(at: entry)
-  #expect(context.entryCount > 0)
-  #expect(context.sectionMap.count == Int(context.entryCount))
+  #expect(context.entryCount == 31)
+  #expect(context.entryCount2 == 31)
+  #expect(context.entriesOffset == 96)
+  #expect(context.lnamSectionId == 152_195)
+  #expect(context.validCount == 25)
+  #expect(context.flags == 5)
+  #expect(context.sectionMap.count == 31)
+  #expect(context.sectionMap.first?.sectionId == 152_196)
+  // lnamSectionId is a resource id: it must resolve to this cast's Lnam
+  // chunk in the chunk map.
+  let lnamEntry = file.chunkMap[Int(context.lnamSectionId)]
+  #expect(lnamEntry.fourCC == "Lnam")
+  #expect(lnamEntry.length == 8806)
+}
+
+@Test func realMovieConfigParses() throws {
+  let file = try RIFXFile.read(from: realMovieData())
+  let config = try #require(try file.movieConfig())
+  #expect(config.rawData.count == 84)
 }
 
 @Test func realShockwaveMovieIsDetectedAsCompressed() throws {
