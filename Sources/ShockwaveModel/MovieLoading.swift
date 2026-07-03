@@ -49,17 +49,8 @@ extension Movie {
     if let lctxRelationship = keyTable?.entries.first(where: {
       $0.fourCC == "Lctx" && $0.ownerChunkIndex == resourceId
     }) {
-      do {
-        sectionMap = try file.scriptContext(at: file.chunkMap[lctxRelationship.childChunkIndex])
-          .sectionMap
-      } catch LingoBytecodeError.invalidOffset {
-        // A cast with no scripts stores entryCount == 0 and entriesOffset ==
-        // the chunk's own length (a valid one-past-the-end pointer, since
-        // nothing is ever read from it). `ScriptContextChunk.read`'s bounds
-        // check rejects that as out of range; work around it here rather
-        // than fail the whole library over a cast that has zero scripts.
-        sectionMap = []
-      }
+      sectionMap = try file.scriptContext(at: file.chunkMap[lctxRelationship.childChunkIndex])
+        .sectionMap
     }
 
     let firstMemberNumber = entry.minMember ?? 1
