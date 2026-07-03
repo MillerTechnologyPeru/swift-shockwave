@@ -106,6 +106,49 @@ private func realMovie() throws -> Movie {
   #expect(cursor.scriptChunk == nil)
 }
 
+@Test func scoreLoadsWithLabelsAndSpans() throws {
+  let movie = try realMovie()
+  let score = try #require(movie.score)
+  #expect(score.frameCount == 30)
+  #expect(movie.getProperty("lastFrame").asInteger() == 30)
+
+  #expect(score.frame(labeled: "mainmenu") == 9)
+  #expect(score.frame(labeled: "MAINMENU") == 9)
+  #expect(score.label(at: 10) == "mainmenu")
+  #expect(score.label(at: 1) == nil)
+
+  #expect(score.spans.count == 431)
+}
+
+@Test func frameBehaviorsResolveToCastMembers() throws {
+  let movie = try realMovie()
+  let score = try #require(movie.score)
+
+  // Frame 1's frame-script behavior is legoparts' "frameloop"
+  // (file-internal lib 1, member 4).
+  let behaviors = score.frameBehaviors(at: 1)
+  #expect(behaviors.count == 1)
+  let frameloop = try #require(movie.castManager.member(behaviors[0]))
+  #expect(frameloop.getProperty("name").asString() == "frameloop")
+  #expect(frameloop.getProperty("type").asString() == "script")
+  #expect(frameloop.scriptChunk != nil)
+}
+
+@Test func spriteSpansExposeLingoSpriteNumbers() throws {
+  let movie = try realMovie()
+  let score = try #require(movie.score)
+
+  let frameSpans = score.spans(at: 5)
+  #expect(!frameSpans.isEmpty)
+  for span in frameSpans {
+    if span.channel > 5 {
+      #expect(span.spriteNumber == span.channel - 5)
+    } else {
+      #expect(span.spriteNumber == nil)
+    }
+  }
+}
+
 private func realMovieData() throws -> Data {
   let url = try #require(
     Bundle.module.url(

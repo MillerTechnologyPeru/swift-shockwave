@@ -227,6 +227,49 @@ private func realMovieData() throws -> Data {
   #expect(digestHex == "045f0a64127ba6ee7be077a4b44f55ed21e0188106cce68f6d9dbb0d9fa2c235")
 }
 
+@Test func realMovieFrameLabelsParse() throws {
+  let file = try RIFXFile.read(from: realMovieData())
+  let labels = try #require(try file.frameLabels()).labels
+  #expect(labels.count == 9)
+  #expect(labels.map(\.frame) == [5, 7, 9, 14, 18, 21, 24, 26, 29])
+  #expect(
+    labels.map(\.name) == [
+      "bumper", "loading", "mainmenu", "play", "levels", "ho-fame", "help", "help2", "credits",
+    ])
+}
+
+@Test func realMovieScoreOrderParses() throws {
+  let file = try RIFXFile.read(from: realMovieData())
+  let order = try #require(try file.scoreOrder()).members
+  #expect(order.count == 1400)
+  #expect(order[0] == ScoreOrderChunk.MemberReference(castLib: 1, member: 43))
+  #expect(order[1] == ScoreOrderChunk.MemberReference(castLib: 7, member: 27))
+}
+
+@Test func realMovieScoreParses() throws {
+  let file = try RIFXFile.read(from: realMovieData())
+  let score = try #require(try file.score())
+  #expect(score.version == 13)
+  #expect(score.channelRecordSize == 48)
+  #expect(score.channelCount == 1006)
+  #expect(score.displayedChannelCount == 1000)
+  #expect(score.frames.count == 30)
+
+  // Frame 1's script channel carries the "frameloop" behavior of the
+  // legoparts cast (file-internal lib 1, member 4).
+  let scriptChannel = try #require(score.frames[0].channels[0])
+  #expect(scriptChannel.count == 48)
+  #expect(Array(scriptChannel.prefix(4)) == [0x00, 0x01, 0x00, 0x04])
+
+  #expect(score.behaviorIntervals.count == 431)
+  let channel0 = score.behaviorIntervals.filter { $0.channel == 0 }
+  #expect(channel0.count == 10)
+  let frameloopUses = score.behaviorIntervals.filter {
+    $0.behaviors.contains(ScoreChunk.BehaviorReference(castLib: 1, member: 6))
+  }
+  #expect(frameloopUses.count == 108)
+}
+
 @Test func realShockwaveMovieIsDetectedAsCompressed() throws {
   let url = try #require(
     Bundle.module.url(
