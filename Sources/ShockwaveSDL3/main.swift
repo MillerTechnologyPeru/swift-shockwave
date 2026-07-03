@@ -6,7 +6,7 @@ import ShockwaveModel
 import ShockwavePlayer
 
 guard CommandLine.arguments.count > 1 else {
-  print("usage: ShockwaveSDL3 <movie.dir>")
+  print("usage: ShockwaveSDL3 <movie.dir> [frame-label | frame-number]")
   exit(64)
 }
 
@@ -34,7 +34,24 @@ defer {
   SDL_DestroyWindow(window)
 }
 
+let stageRenderer = try StageRenderer(file: file, movie: movie, renderer: renderer)
+
 player.start()
+
+// Optional starting point: a frame label or number (junkbot idles on
+// frame 1 until its network-streaming flow calls go, so jumping to
+// "mainmenu" etc. is the way to see content).
+if CommandLine.arguments.count > 2 {
+  let target = CommandLine.arguments[2]
+  if let frame = Int(target) {
+    player.jump(to: frame)
+  } else if let frame = movie.score?.frame(labeled: target) {
+    player.jump(to: frame)
+  } else {
+    print("unknown frame label: \(target)")
+  }
+}
+
 var transcriptIndex = 0
 
 @MainActor
@@ -76,6 +93,7 @@ while running {
 
   SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255)
   SDL_RenderClear(renderer)
+  stageRenderer.renderFrame(player.currentFrame, player: player)
   SDL_RenderPresent(renderer)
   SDL_Delay(66)  // ~15fps until the config tempo field is decoded
 }
