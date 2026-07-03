@@ -70,15 +70,21 @@ final class StageRenderer {
       let properties = member.chunk.bitmapProperties
     else { return }
     let transparent = record.ink != 0
-    guard let texture = texture(for: member, properties: properties, transparent: transparent)
+    guard
+      let texture = texture(
+        for: member, properties: properties, transparent: transparent,
+        backColorIndex: record.backColor)
     else { return }
     SDL_RenderTexture(renderer, texture, nil, &destination)
   }
 
   private func texture(
-    for member: CastMember, properties: BitmapMemberProperties, transparent: Bool
+    for member: CastMember, properties: BitmapMemberProperties, transparent: Bool,
+    backColorIndex: Int
   ) -> UnsafeMutablePointer<SDL_Texture>? {
-    let key = (member.libraryNumber << 20) | (member.memberNumber << 1) | (transparent ? 1 : 0)
+    let key =
+      (member.libraryNumber << 24) | (member.memberNumber << 9) | (backColorIndex & 0xFF) << 1
+      | (transparent ? 1 : 0)
     if let cached = textures[key] { return cached }
 
     var result: UnsafeMutablePointer<SDL_Texture>?
@@ -91,7 +97,7 @@ final class StageRenderer {
       let rgba = BitmapConversion.rgba(
         pixels: pixels, properties: properties,
         palette: BuiltinPalette.colors(forMember: properties.paletteMember),
-        transparentWhite: transparent)
+        transparent: transparent, backColorIndex: backColorIndex)
     else { return nil }
 
     let width = Int32(properties.bounds.width)
