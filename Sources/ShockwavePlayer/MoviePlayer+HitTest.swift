@@ -31,6 +31,19 @@ extension MoviePlayer {
     return movieModel.castManager.library(fileNumber: record.castLib)?.member(record.member)
   }
 
+  /// Whether a sprite channel is currently showing.
+  ///
+  /// Scripts hide and reveal whole groups of sprites by setting
+  /// `the visible of sprite`, so a channel with a score record isn't
+  /// necessarily on screen. An untouched channel has no `visible` property
+  /// at all, which means visible — only an explicit false hides it.
+  public func isSpriteVisible(_ spriteNumber: Int) -> Bool {
+    guard let sprite = sprite(.integer(spriteNumber)) else { return true }
+    let visible = sprite.getProperty("visible")
+    if case .void = visible { return true }
+    return visible.asBool()
+  }
+
   /// The on-stage rect for a sprite channel record, with any puppeted
   /// `locH`/`locV` override applied — the same geometry `StageRenderer`
   /// draws with, factored out so hit-testing and rendering can't drift.
