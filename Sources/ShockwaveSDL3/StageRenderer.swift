@@ -41,27 +41,14 @@ final class StageRenderer {
   }
 
   private func drawSprite(_ record: SpriteChannelRecord, spriteNumber: Int, player: MoviePlayer) {
-    var castLib = record.castLib
-    var memberNumber = record.member
-
-    // Puppeted member override: Lingo-set member on the sprite channel wins
-    // over the score's record. (locH/locV puppet override is applied by
-    // `spriteRect`, shared with hit-testing so the two can't drift.)
-    if let sprite = player.sprite(.integer(spriteNumber)),
-      case .object(let memberObject) = sprite.getProperty("member"),
-      let castMember = memberObject as? CastMember,
-      let library = movie.castManager.library(number: castMember.libraryNumber),
-      let fileNumber = library.fileNumber
-    {
-      castLib = fileNumber
-      memberNumber = castMember.memberNumber
-    }
-
+    // Member resolution (including any Lingo puppet override) and the
+    // geometry both come from the player, so rendering and hit-testing
+    // can't drift apart.
     let rect = player.spriteRect(record, spriteNumber: spriteNumber)
     var destination = SDL_FRect(
       x: Float(rect.left), y: Float(rect.top), w: Float(rect.width), h: Float(rect.height))
 
-    guard let member = movie.castManager.library(fileNumber: castLib)?.member(memberNumber),
+    guard let member = player.effectiveMember(record, spriteNumber: spriteNumber),
       let properties = member.chunk.bitmapProperties
     else { return }
     guard
