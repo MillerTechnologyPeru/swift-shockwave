@@ -31,3 +31,9 @@ import Testing
   #expect(BuiltinPalette.colors(forMember: -8) == BuiltinPalette.macSystem)
   #expect(BuiltinPalette.colors(forMember: -999) == BuiltinPalette.macSystem)
 }
+
+@Test func vgaResolvesToWindowsSystemPalette() {
+  // VGA ships no table of its own and resolves to System-Win, not the Mac
+  // palette the other unknown ids fall back to.
+  #expect(BuiltinPalette.colors(forMember: -9) == BuiltinPalette.systemWin)
+}
