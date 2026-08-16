@@ -67,7 +67,7 @@ extension MoviePlayer {
 
   // MARK: - Frame transitions
 
-  private func enterFrame(_ frame: Int, isFirst: Bool) {
+  private func enterFrame(_ frame: Int, isFirst: Bool, redirects: Int = 0) {
     let previous = Set(activeSpanIndices())
     currentFrame = frame
     movieModel.setProperty("frame", value: .integer(frame))
@@ -85,8 +85,25 @@ extension MoviePlayer {
       callHandler("startMovie")
     }
     stepActors()
+    // An actor that calls `go` is redirecting the playhead now, not at the
+    // end of this frame: a looping frame script (`go to the frame` on
+    // exitFrame) would otherwise overwrite the actor's target before it
+    // ever took effect, which is exactly how the sample's loading sequence
+    // steers itself off its first frame. The hop count stops an actor that
+    // redirects unconditionally from recursing without end.
+    if let target = nextFrame, target != frame, isPlaying, redirects < Self.maxFrameRedirects,
+      let score = movieModel.score, target >= 1, target <= score.frameCount
+    {
+      nextFrame = nil
+      enterFrame(target, isFirst: false, redirects: redirects + 1)
+      return
+    }
     dispatchFrameEvent("enterFrame")
   }
+
+  /// How many times one frame's actors may redirect the playhead before the
+  /// player stops following them and just runs the frame it landed on.
+  private static let maxFrameRedirects = 16
 
   /// Sends `stepFrame` to everything on `the actorList`, between
   /// `prepareFrame` and `enterFrame`.
@@ -106,7 +123,7 @@ extension MoviePlayer {
       guard let instance = object as? ScriptInstance,
         instance.handler(named: "stepFrame") != nil
       else { continue }
-      _ = instance.callMethod("stepFrame", args: [.object(instance)])
+      _ = instance.callMethod("stepFrame", args: [])
     }
   }
 
@@ -123,14 +140,14 @@ extension MoviePlayer {
     }
     activeSpans[index] = instances
     for instance in instances where instance.handler(named: "beginSprite") != nil {
-      _ = instance.callMethod("beginSprite", args: [.object(instance)])
+      _ = instance.callMethod("beginSprite", args: [])
     }
   }
 
   private func closeSpan(_ index: Int) {
     guard let instances = activeSpans.removeValue(forKey: index) else { return }
     for instance in instances where instance.handler(named: "endSprite") != nil {
-      _ = instance.callMethod("endSprite", args: [.object(instance)])
+      _ = instance.callMethod("endSprite", args: [])
     }
   }
 
@@ -142,7 +159,7 @@ extension MoviePlayer {
     for index in activeSpanIndices() {
       guard let instances = activeSpans[index] else { continue }
       for instance in instances where instance.handler(named: event) != nil {
-        _ = instance.callMethod(event, args: [.object(instance)])
+        _ = instance.callMethod(event, args: [])
       }
     }
     if movieHandlerNames.contains(event.asciiLowercased()) {
@@ -156,7 +173,7 @@ extension MoviePlayer {
     for index in activeSpanIndices() where score.spans[index].channel == channel {
       guard let instances = activeSpans[index] else { continue }
       for instance in instances where instance.handler(named: event) != nil {
-        _ = instance.callMethod(event, args: [.object(instance)])
+        _ = instance.callMethod(event, args: [])
         handled = true
       }
     }
