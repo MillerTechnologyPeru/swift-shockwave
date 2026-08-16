@@ -235,6 +235,53 @@ private func realMovieData() throws -> Data {
   #expect(frame.spriteRecord(channel: 900) == nil)
 }
 
+@Test func inkByteSplitsIntoInkAndFlags() {
+  var bytes = [UInt8](repeating: 0, count: 48)
+  bytes[0] = 1
+  bytes[6] = 1  // populate the member ref so the record isn't treated as empty
+
+  // 0xA4: stretch set, ink 36 (background transparent). The junkbot sample
+  // stores exactly this in 20 of its records.
+  bytes[1] = 0xA4
+  var record = try! #require(SpriteChannelRecord(bytes: bytes))
+  #expect(record.ink == 36)
+  #expect(record.stretch)
+  #expect(!record.trails)
+
+  // Trails must not fold into the ink number: 0x40 | 8 is still matte.
+  bytes[1] = 0x48
+  record = try! #require(SpriteChannelRecord(bytes: bytes))
+  #expect(record.ink == 8)
+  #expect(record.trails)
+  #expect(!record.stretch)
+}
+
+@Test func colorCodeByteSplitsIntoFlags() {
+  var bytes = [UInt8](repeating: 0, count: 48)
+  bytes[6] = 1
+  bytes[20] = 0xC5  // moveable + editable + score color 5
+  bytes[21] = 204
+  let record = try! #require(SpriteChannelRecord(bytes: bytes))
+  #expect(record.scoreColor == 5)
+  #expect(record.isEditable)
+  #expect(record.isMoveable)
+  #expect(record.blendAmount == 204)
+}
+
+@Test func realMovieSpriteFlagsDecode() throws {
+  let file = try RIFXFile.read(from: realMovieData())
+  let score = try #require(try file.score())
+  // Nothing in the sample uses trails, and its stage sprites aren't
+  // moveable or editable; blend is left at the opaque default.
+  for frame in score.frames {
+    for channel in frame.channels.keys where channel >= 6 {
+      guard let record = frame.spriteRecord(channel: channel) else { continue }
+      #expect(!record.trails)
+      #expect(record.ink < 64)
+    }
+  }
+}
+
 @Test func paletteChunkParsesColors() throws {
   // No CLUT members exist in the junkbot sample (it uses built-in
   // palettes only), so this exercises the parser on synthetic bytes.
