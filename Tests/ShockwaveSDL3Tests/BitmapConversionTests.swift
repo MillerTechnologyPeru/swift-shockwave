@@ -77,35 +77,56 @@ private let ring: [UInt8] = [
   }
 }
 
-@Test func matteKeysWhiteNotBackColor() throws {
-  // backColor names red (index 2); matte must still key against white.
+@Test func matteKeysBackColorNotWhite() throws {
+  // backColor names red (index 2), so red is the key and white is artwork.
+  // Column 0 is red (edge-connected), the center white pixel is not keyed.
   let pixels: [UInt8] = [
-    0, 0, 0,
-    0, 1, 2,
-    0, 0, 0,
+    2, 0, 0,
+    2, 0, 1,
+    2, 0, 0,
   ]
   let rgba = try #require(
     BitmapConversion.rgba(
       pixels: pixels, properties: properties(width: 3, height: 3), palette: testPalette,
       ink: .matte, backColorIndex: 2, sourcePlanar: false))
+  // The red column clears...
   #expect(alpha(rgba, 0, 0, width: 3) == 0)
+  #expect(alpha(rgba, 0, 1, width: 3) == 0)
+  // ...and white stays opaque, because white is not the key color here.
   #expect(alpha(rgba, 1, 1, width: 3) == 255)
-  // The red pixel is not the matte key even though it's the backColor.
-  #expect(alpha(rgba, 2, 1, width: 3) == 255)
+  #expect(alpha(rgba, 2, 0, width: 3) == 255)
 }
 
-@Test func ghostTurnsArtworkWhiteAndBackgroundClear() throws {
+@Test func ghostKeysBackColorAndInvertsTheRest() throws {
   let rgba = try #require(
     BitmapConversion.rgba(
       pixels: ring, properties: properties(width: 5, height: 5), palette: testPalette,
       ink: .ghost, backColorIndex: 0, sourcePlanar: false))
-  // Every white pixel vanishes — exterior and enclosed alike.
+  // backColor 0 is white here, so every white pixel is keyed out —
+  // exterior and enclosed alike, since ghost does not flood fill.
   #expect(alpha(rgba, 0, 0, width: 5) == 0)
   #expect(alpha(rgba, 2, 2, width: 5) == 0)
-  // The black ring erases to opaque white (srcBic).
+  // The black ring survives, inverted to white — matching Director's
+  // `dst & ~src` for the black-on-white case.
   #expect(alpha(rgba, 1, 1, width: 5) == 255)
   let base = (1 * 5 + 1) * 4
   #expect(rgba[base] == 255 && rgba[base + 1] == 255 && rgba[base + 2] == 255)
+}
+
+@Test func ghostInvertsColorArtwork() throws {
+  // Red (255,0,0) artwork on a white keyed field inverts to cyan.
+  let pixels: [UInt8] = [
+    0, 0, 0,
+    0, 2, 0,
+    0, 0, 0,
+  ]
+  let rgba = try #require(
+    BitmapConversion.rgba(
+      pixels: pixels, properties: properties(width: 3, height: 3), palette: testPalette,
+      ink: .ghost, backColorIndex: 0, sourcePlanar: false))
+  let base = (1 * 3 + 1) * 4
+  #expect(rgba[base] == 0 && rgba[base + 1] == 255 && rgba[base + 2] == 255)
+  #expect(alpha(rgba, 1, 1, width: 3) == 255)
 }
 
 @Test func inkNumberMapping() {
