@@ -94,9 +94,8 @@ public enum BuiltinPalette {
     (0, 0, 0),
   ].map { PaletteChunk.Color(red: $0.0, green: $0.1, blue: $0.2) }
 
-  /// Resolves a built-in palette member id to a color table. Unknown ids
-  /// (including the not-yet-transcribed D7-era `-8` Web 216 and `-9` VGA)
-  /// fall back to the Mac system palette.
+  /// Resolves a built-in palette member id to a color table. `-8` (Web 216)
+  /// and any unknown id still fall back to the Mac system palette.
   public static func colors(forMember member: Int) -> [PaletteChunk.Color] {
     switch member {
     case -2: return rainbow
@@ -107,6 +106,9 @@ public enum BuiltinPalette {
     case -7: return metallic
     case -101: return systemWin
     case -102: return systemWinD5
+    // VGA has no table of its own; Director-era players resolve it to the
+    // Windows system palette rather than the Mac one.
+    case -9: return systemWin
     default: return macSystem
     }
   }
