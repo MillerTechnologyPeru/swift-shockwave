@@ -84,8 +84,12 @@ struct ShockwaveSDL3Command: AsyncParsableCommand {
     flushTranscript()
 
     if let screenshotPath = screenshot {
+      // Paced at the movie's own tempo rather than run flat out: scripts
+      // gate on `the ticks`, so a loop with no elapsed time between frames
+      // never satisfies them.
       for _ in 0..<screenshotDelay where player.isPlaying {
         player.step()
+        SDL_Delay(UInt32(player.frameDelayMs.rounded()))
       }
       flushTranscript()
       SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255)
