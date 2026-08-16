@@ -84,7 +84,30 @@ extension MoviePlayer {
     if isFirst {
       callHandler("startMovie")
     }
+    stepActors()
     dispatchFrameEvent("enterFrame")
+  }
+
+  /// Sends `stepFrame` to everything on `the actorList`, between
+  /// `prepareFrame` and `enterFrame`.
+  ///
+  /// This is how a Director movie runs logic that isn't tied to a sprite or
+  /// a frame script: an object adds itself to the list and is driven once
+  /// per frame. The junkbot sample's download manager is one — its whole
+  /// loading sequence is a `stepFrame` state machine — so without this the
+  /// movie sits on its first frame forever.
+  ///
+  /// The list is snapshotted first because actors routinely remove
+  /// themselves (or add others) from inside their own `stepFrame`.
+  private func stepActors() {
+    guard case .listType(let list) = movieModel.getProperty("actorList") else { return }
+    for actor in list.elements {
+      guard case .object(let object) = actor else { continue }
+      guard let instance = object as? ScriptInstance,
+        instance.handler(named: "stepFrame") != nil
+      else { continue }
+      _ = instance.callMethod("stepFrame", args: [.object(instance)])
+    }
   }
 
   private func openSpan(_ index: Int) {
