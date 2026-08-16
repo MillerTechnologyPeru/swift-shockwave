@@ -1,9 +1,10 @@
 /// The built-in palettes Director references by negative palette member
 /// ids: `-1` System-Mac, `-2` Rainbow, `-3` Grayscale, `-4` Pastels, `-5`
 /// Vivid, `-6` NTSC, `-7` Metallic, `-8` Web 216, `-9` VGA, `-101`
-/// System-Win (Director 4-era id), `-102` System-Win. Only Metallic and
-/// Grayscale have verified real tables here; the rest fall back to the Mac
-/// system palette until their tables can be validated visually.
+/// System-Win, `-102` System-Win (Director 5 variant). All the D4-era
+/// tables are real data verified against the palette resources in the
+/// Director for Windows projector; only the D7-era additions (`-8`
+/// Web 216, `-9` VGA) still fall back to the Mac system palette.
 public enum BuiltinPalette {
   /// The classic Mac 8-bit system palette: a 6-level RGB color cube
   /// (255/204/153/102/51/0, red varying slowest, minus the black entry),
@@ -87,20 +88,25 @@ public enum BuiltinPalette {
     (32, 32, 32), (47, 47, 47), (62, 62, 62), (77, 77, 77), (92, 92, 92),
     (106, 106, 106), (121, 121, 121), (136, 136, 136), (151, 151, 151), (166, 166, 166),
     (181, 181, 181), (196, 196, 196), (211, 211, 211), (226, 226, 226), (241, 241, 241),
-    (254, 255, 255), (238, 238, 238), (221, 221, 221), (204, 204, 204), (187, 187, 187),
+    (255, 255, 255), (238, 238, 238), (221, 221, 221), (204, 204, 204), (187, 187, 187),
     (170, 170, 170), (153, 153, 153), (136, 136, 136), (119, 119, 119), (102, 102, 102),
     (85, 85, 85), (68, 68, 68), (51, 51, 51), (34, 34, 34), (17, 17, 17),
     (0, 0, 0),
   ].map { PaletteChunk.Color(red: $0.0, green: $0.1, blue: $0.2) }
 
-  /// Resolves a built-in palette member id to a color table. Only `-3`
-  /// (Grayscale) and `-7` (Metallic) are verified real tables; every other
-  /// id — including `-101`/`-102` (System-Win variants, not Mac) — falls
-  /// back to the Mac system cube until it can be validated visually.
+  /// Resolves a built-in palette member id to a color table. Unknown ids
+  /// (including the not-yet-transcribed D7-era `-8` Web 216 and `-9` VGA)
+  /// fall back to the Mac system palette.
   public static func colors(forMember member: Int) -> [PaletteChunk.Color] {
     switch member {
+    case -2: return rainbow
     case -3: return grayscale
+    case -4: return pastels
+    case -5: return vivid
+    case -6: return ntsc
     case -7: return metallic
+    case -101: return systemWin
+    case -102: return systemWinD5
     default: return macSystem
     }
   }
