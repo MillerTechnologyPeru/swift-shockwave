@@ -13,7 +13,7 @@ final class StageRenderer {
   private let file: RIFXFile
   private let movie: Movie
   private let renderer: OpaquePointer
-  /// Textures keyed by (fileCastLib << 16 | member) and transparency mode.
+  /// Textures keyed by library, member, backColor, and ink mode.
   private var textures: [Int: UnsafeMutablePointer<SDL_Texture>?] = [:]
   /// BITD chunk ids keyed by owning CASt chunk id.
   private var bitmapDataIds: [Int: Int] = [:]
@@ -64,22 +64,21 @@ final class StageRenderer {
     guard let member = movie.castManager.library(fileNumber: castLib)?.member(memberNumber),
       let properties = member.chunk.bitmapProperties
     else { return }
-    let transparent = record.ink != 0
     guard
       let texture = texture(
-        for: member, properties: properties, transparent: transparent,
+        for: member, properties: properties, ink: SpriteInk(inkNumber: record.ink),
         backColorIndex: record.backColor)
     else { return }
     SDL_RenderTexture(renderer, texture, nil, &destination)
   }
 
   private func texture(
-    for member: CastMember, properties: BitmapMemberProperties, transparent: Bool,
+    for member: CastMember, properties: BitmapMemberProperties, ink: SpriteInk,
     backColorIndex: Int
   ) -> UnsafeMutablePointer<SDL_Texture>? {
     let key =
-      (member.libraryNumber << 24) | (member.memberNumber << 9) | (backColorIndex & 0xFF) << 1
-      | (transparent ? 1 : 0)
+      (member.libraryNumber << 24) | (member.memberNumber << 10) | (backColorIndex & 0xFF) << 2
+      | ink.cacheBits
     if let cached = textures[key] { return cached }
 
     var result: UnsafeMutablePointer<SDL_Texture>?
@@ -92,7 +91,7 @@ final class StageRenderer {
       let rgba = BitmapConversion.rgba(
         pixels: decoded.pixels, properties: properties,
         palette: BuiltinPalette.colors(forMember: properties.paletteMember),
-        transparent: transparent, backColorIndex: backColorIndex,
+        ink: ink, backColorIndex: backColorIndex,
         sourcePlanar: decoded.wasCompressed)
     else { return nil }
 
