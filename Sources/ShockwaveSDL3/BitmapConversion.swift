@@ -5,17 +5,16 @@ import ShockwaveFile
 /// for SDL textures.
 enum BitmapConversion {
   /// - Parameters:
-  ///   - ink: how transparency is derived. `.copy` composites every pixel
-  ///     opaque; `.backgroundTransparent` keys out every pixel matching the
-  ///     sprite's `backColor`; `.matte` keys out only the white region
-  ///     connected to the bitmap's edges (white pixels enclosed by the
-  ///     artwork stay opaque); `.ghost` turns non-white pixels white and
-  ///     white pixels transparent.
+  ///   - ink: how the keyed pixels are treated. `.copy` composites every
+  ///     pixel opaque; `.backgroundTransparent` clears every keyed pixel;
+  ///     `.matte` clears only the keyed region connected to the bitmap's
+  ///     edges; `.ghost` clears keyed pixels and inverts the rest.
   ///   - backColorIndex: the sprite record's own `backColor` — the palette
-  ///     index Director actually keys transparency against for indexed
-  ///     bitmaps, not necessarily white. Ignored for direct-color depths
-  ///     (16/32-bit), where near-white is keyed instead since there is no
-  ///     palette index to compare.
+  ///     index Director keys transparency against for indexed bitmaps, and
+  ///     the same key for all three transparent inks. Ignored for
+  ///     direct-color depths (16/32-bit), where near-white is keyed instead
+  ///     since there is no palette index to compare; that remains an
+  ///     approximation pending real matte/mask support.
   ///   - sourcePlanar: whether the 16-bit source stores each row as two
   ///     separate byte planes (every high byte, then every low byte) rather
   ///     than interleaved high/low pairs per pixel. Byte-run-compressed BITD
@@ -49,9 +48,8 @@ enum BitmapConversion {
     switch properties.bitsPerPixel {
     case 1:
       // A 1-bit image's implicit 2-entry palette is {white, black} at
-      // indices {0, 1}. Background-transparent keys whichever index
-      // backColor names; matte and ghost key white (bit 0).
-      let keyBit = ink.keysWhite ? 0 : backColorIndex & 1
+      // indices {0, 1}; key against whichever index backColor names.
+      let keyBit = backColorIndex & 1
       for y in 0..<height {
         let row = y * rowBytes
         for x in 0..<width {
@@ -65,10 +63,7 @@ enum BitmapConversion {
         }
       }
     case 8:
-      // Matte and ghost key against white — the palette entry that actually
-      // renders white — not the sprite's backColor.
-      let whiteIndex = palette.firstIndex { $0.red == 255 && $0.green == 255 && $0.blue == 255 }
-      let keyIndex = ink.keysWhite ? (whiteIndex ?? -1) : backColorIndex
+      let keyIndex = backColorIndex
       for y in 0..<height {
         let row = y * rowBytes
         for x in 0..<width {
@@ -131,14 +126,13 @@ enum BitmapConversion {
     case .matte:
       clearEdgeConnectedRegion(keyed: keyed, width: width, height: height, output: &output)
     case .ghost:
-      // srcBic: dark pixels erase to white, white pixels vanish.
       for index in 0..<keyed.count {
         if keyed[index] {
           output[index * 4 + 3] = 0
         } else {
-          output[index * 4] = 255
-          output[index * 4 + 1] = 255
-          output[index * 4 + 2] = 255
+          output[index * 4] = 255 - output[index * 4]
+          output[index * 4 + 1] = 255 - output[index * 4 + 1]
+          output[index * 4 + 2] = 255 - output[index * 4 + 2]
         }
       }
     }
