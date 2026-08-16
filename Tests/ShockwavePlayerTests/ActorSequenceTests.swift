@@ -32,7 +32,8 @@ private func actorNames(_ player: MoviePlayer) -> [String] {
 @MainActor
 @Test func actorsRegisterThemselvesDuringStartup() throws {
   let player = try startedPlayer()
-  #expect(actorNames(player).sorted() == ["database manager", "download manager"])
+  #expect(
+    actorNames(player).sorted() == ["database manager", "download manager", "play manager"])
 }
 
 /// `the visible of sprite` is how scripts hide and reveal groups of
