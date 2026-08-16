@@ -82,13 +82,13 @@ private func realPlayer() throws -> MoviePlayer {
   #expect(player.movieModel.getProperty("exitLock").asInteger() == 1)
   //   the itemDelimiter = ","
   #expect(player.movieModel.getProperty("itemDelimiter").asString() == ",")
-  //   the actorList = [], which `database manager`'s constructor then joins
-  //   with `(the actorList).add(me)` later in the same handler
+  //   the actorList = [], which the `play` and `database` managers then
+  //   join with `(the actorList).add(me)` as prepareMovie constructs them
   guard case .listType(let actorList) = player.movieModel.getProperty("actorList") else {
     Issue.record("actorList should be a list")
     return
   }
-  #expect(actorList.elements.count == 1)
+  #expect(actorList.elements.count == 2)
 
   //   glob = [#EDITOR: [:], #catalog: [:], #PLAYER: [:]] with managers
   //   installed by new(script(...)) — makeObject instantiating real parent
