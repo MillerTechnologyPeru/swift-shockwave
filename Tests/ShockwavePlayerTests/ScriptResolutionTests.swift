@@ -28,6 +28,27 @@ import Testing
   }
 }
 
+/// Every manager the sample builds in `prepareMovie` has to instantiate,
+/// not just resolve — `database manager`'s constructor calls
+/// `(the actorList).add(me)`, so it only works once `prepareMovie` has run
+/// `the actorList = []`. Instantiating it beforehand hangs: calling a
+/// method on VOID never returns in the VM.
+@MainActor
+@Test func prepareMovieBuildsItsManagers() throws {
+  let file = try RIFXFile.read(from: Data(contentsOf: TestResources.junkbotMovieURL))
+  let movie = try Movie.load(from: file)
+  let player = MoviePlayer(movie: movie)
+  player.start()
+
+  for name in [
+    "config manager", "download manager", "legoparts manager", "play manager",
+    "database manager",
+  ] {
+    #expect(player.makeObject(scriptName: name, args: []) != nil, "\(name) should instantiate")
+  }
+  #expect(player.transcript.filter { $0.hasPrefix("no script cast member") }.isEmpty)
+}
+
 @MainActor
 @Test func genuinelyMissingScriptIsReportedOnce() throws {
   let file = try RIFXFile.read(from: Data(contentsOf: TestResources.junkbotMovieURL))
