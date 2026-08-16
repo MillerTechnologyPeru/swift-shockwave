@@ -1,0 +1,58 @@
+import Foundation
+import LingoRuntime
+import ShockwaveFile
+import ShockwaveModel
+import ShockwaveTestSupport
+import Testing
+
+private func realMovie() throws -> Movie {
+  let file = try RIFXFile.read(from: Data(contentsOf: TestResources.junkbotMovieURL))
+  return try Movie.load(from: file)
+}
+
+/// Text xtra members carry their content in `XMED` media (Director's rich
+/// text engine) rather than an `STXT`. The sample's level definitions,
+/// level titles, and the loading screen's messages all live there.
+@Test func xtraTextMembersLoadTheirAuthoredText() throws {
+  let movie = try realMovie()
+
+  // The loading screen's message member — authored, not just runtime-set.
+  let library14 = try #require(movie.castManager.library(fileNumber: 14))
+  let message = try #require(
+    library14.members.values.first { $0.name == "download_msg" })
+  #expect(message.authoredText == "READY TO PLAY")
+
+  // The loading screen's playable demo level: a full level definition.
+  let level = try #require(
+    library14.members.values.first { $0.name == "loading_level" })
+  let text = try #require(level.authoredText)
+  #expect(text.hasPrefix("[info]"))
+  #expect(text.contains("[playfield]"))
+  #expect(text.contains("size=35,22"))
+  #expect(text.contains("[partslist]"))
+}
+
+/// The game's 60 level definitions are authored in the `dynamic` cast (in
+/// the shipped game they stream into `levels` at runtime — this build bakes
+/// them in). Every one must expose a parseable definition, since
+/// `prepareLevelMenu` walks them with `parseParams`.
+@Test func theDynamicCastHoldsAllSixtyLevelDefinitions() throws {
+  let movie = try realMovie()
+  let dynamicCast = try #require(movie.castManager.library(named: "dynamic"))
+  var definitions = 0
+  for (_, member) in dynamicCast.members where member.chunk.type == .xtra {
+    let text = try #require(member.text, "'\(member.name ?? "?")' has no text")
+    #expect(text.contains("[info]"), "'\(member.name ?? "?")'")
+    #expect(text.contains("[playfield]"), "'\(member.name ?? "?")'")
+    definitions += 1
+  }
+  #expect(definitions == 60)
+}
+
+/// Non-text media also ships as `XMED` (fonts, 3D scenes); those must not
+/// produce garbage text.
+@Test func nonTextMediaYieldsNoText() {
+  #expect(XMediaText.text(from: Data("PFR1garbage".utf8)) == nil)
+  #expect(XMediaText.text(from: Data()) == nil)
+  #expect(XMediaText.text(from: Data("FFFF00000006".utf8)) == nil)
+}
