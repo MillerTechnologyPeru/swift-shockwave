@@ -117,16 +117,29 @@ extension Movie {
       }
     }
 
+    // Field text (`STXT`) hangs off the member's own `CASt` chunk in the
+    // key table, the same owned-by relationship bitmaps use for `BITD`.
+    var textChunkIds: [Int: Int] = [:]
+    for relationship in keyTable?.entries ?? []
+    where relationship.fourCC == "STXT" && relationship.childChunkIndex < file.chunkMap.count {
+      textChunkIds[relationship.ownerChunkIndex] = relationship.childChunkIndex
+    }
+
     let firstMemberNumber = entry.minMember ?? 1
     var members: [Int: CastMember] = [:]
     for (offset, memberId) in castTable.memberIds.enumerated() where memberId != 0 {
       let memberNumber = firstMemberNumber + offset
       let chunk = try file.castMember(at: file.chunkMap[memberId])
       let scriptChunk = try loadScriptChunk(for: chunk, sectionMap: sectionMap, file: file)
+      var authoredText: String?
+      if let textId = textChunkIds[memberId] {
+        authoredText = try? file.textChunk(at: file.chunkMap[textId]).text
+      }
       members[memberNumber] = CastMember(
         libraryNumber: libraryNumber, memberNumber: memberNumber, chunk: chunk,
         scriptChunk: scriptChunk, scriptNames: scriptNames,
-        scriptUsesCapitalContext: capitalContext, environment: environment)
+        scriptUsesCapitalContext: capitalContext, authoredText: authoredText,
+        environment: environment)
     }
     return members
   }
