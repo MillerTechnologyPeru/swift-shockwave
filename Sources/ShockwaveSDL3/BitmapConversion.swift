@@ -13,12 +13,18 @@ enum BitmapConversion {
   ///     bitmaps, not necessarily white. Ignored for direct-color depths
   ///     (16/32-bit), where a plain white-detection heuristic is used
   ///     instead pending real matte/mask support.
+  ///   - sourcePlanar: whether the 16-bit source stores each row as two
+  ///     separate byte planes (every high byte, then every low byte) rather
+  ///     than interleaved high/low pairs per pixel. Byte-run-compressed BITD
+  ///     chunks store 16-bit rows planar; raw/uncompressed ones store them
+  ///     interleaved. Ignored for every other bit depth.
   static func rgba(
     pixels: [UInt8],
     properties: BitmapMemberProperties,
     palette: [PaletteChunk.Color],
     transparent: Bool,
-    backColorIndex: Int
+    backColorIndex: Int,
+    sourcePlanar: Bool
   ) -> [UInt8]? {
     let width = properties.bounds.width
     let height = properties.bounds.height
@@ -69,7 +75,17 @@ enum BitmapConversion {
       for y in 0..<height {
         let row = y * rowBytes
         for x in 0..<width {
-          let value = UInt16(pixels[row + x * 2]) << 8 | UInt16(pixels[row + x * 2 + 1])
+          let high: UInt8
+          let low: UInt8
+          if sourcePlanar {
+            // Compressed rows store every high byte, then every low byte.
+            high = pixels[row + x]
+            low = pixels[row + width + x]
+          } else {
+            high = pixels[row + x * 2]
+            low = pixels[row + x * 2 + 1]
+          }
+          let value = UInt16(high) << 8 | UInt16(low)
           let r = UInt8((value >> 10) & 0x1F) << 3
           let g = UInt8((value >> 5) & 0x1F) << 3
           let b = UInt8(value & 0x1F) << 3
