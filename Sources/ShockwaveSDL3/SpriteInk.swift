@@ -10,14 +10,17 @@ enum SpriteInk: Equatable {
   /// Ink 36 ("background transparent"): pixels matching the sprite's
   /// `backColor` are keyed out wherever they appear.
   case backgroundTransparent
-  /// Ink 8 ("matte"): only the background-colored region connected to the
-  /// bitmap's edges is keyed out — background-colored pixels enclosed by
-  /// the artwork stay opaque. Director keys matte against white, not the
-  /// sprite's `backColor`.
+  /// Ink 8 ("matte"): like `backgroundTransparent`, but only the keyed
+  /// region connected to the bitmap's edges clears — keyed pixels enclosed
+  /// by the artwork stay opaque. The key color is the same `backColor`;
+  /// the flood fill is the entire difference between the two inks.
   case matte
-  /// Ink 3 ("ghost"): QuickDraw's `srcBic` — dark (non-white) source
-  /// pixels erase the destination to white, white source pixels are
-  /// transparent. The classic use is invisible/highlight buttons.
+  /// Ink 3 ("ghost"): keys out `backColor` like the other transparent inks,
+  /// and inverts what survives. Director's real operation is `dst = dst &
+  /// ~src` on palette indices, which depends on what's already on the
+  /// stage; a per-texture conversion can't express that, so the surviving
+  /// pixels are RGB-inverted — exact for the black-on-white artwork ghost
+  /// is normally used with, approximate for anything else.
   case ghost
 
   /// Maps a score record's raw ink number onto a renderer mode. Unhandled
@@ -30,12 +33,6 @@ enum SpriteInk: Equatable {
     case 8: self = .matte
     default: self = .backgroundTransparent
     }
-  }
-
-  /// Whether the ink keys transparency against white rather than the
-  /// sprite's `backColor` palette index.
-  var keysWhite: Bool {
-    self == .matte || self == .ghost
   }
 
   /// Stable 2-bit value for texture cache keys.
