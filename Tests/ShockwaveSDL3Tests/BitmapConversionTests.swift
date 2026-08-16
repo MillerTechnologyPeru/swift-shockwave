@@ -94,10 +94,25 @@ private let ring: [UInt8] = [
   #expect(alpha(rgba, 2, 1, width: 3) == 255)
 }
 
+@Test func ghostTurnsArtworkWhiteAndBackgroundClear() throws {
+  let rgba = try #require(
+    BitmapConversion.rgba(
+      pixels: ring, properties: properties(width: 5, height: 5), palette: testPalette,
+      ink: .ghost, backColorIndex: 0, sourcePlanar: false))
+  // Every white pixel vanishes — exterior and enclosed alike.
+  #expect(alpha(rgba, 0, 0, width: 5) == 0)
+  #expect(alpha(rgba, 2, 2, width: 5) == 0)
+  // The black ring erases to opaque white (srcBic).
+  #expect(alpha(rgba, 1, 1, width: 5) == 255)
+  let base = (1 * 5 + 1) * 4
+  #expect(rgba[base] == 255 && rgba[base + 1] == 255 && rgba[base + 2] == 255)
+}
+
 @Test func inkNumberMapping() {
   #expect(SpriteInk(inkNumber: 0) == .copy)
+  #expect(SpriteInk(inkNumber: 3) == .ghost)
   #expect(SpriteInk(inkNumber: 8) == .matte)
   #expect(SpriteInk(inkNumber: 36) == .backgroundTransparent)
   // Unimplemented inks fall back to background transparent.
-  #expect(SpriteInk(inkNumber: 3) == .backgroundTransparent)
+  #expect(SpriteInk(inkNumber: 2) == .backgroundTransparent)
 }
