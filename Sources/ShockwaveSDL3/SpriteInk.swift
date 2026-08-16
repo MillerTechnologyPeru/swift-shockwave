@@ -15,6 +15,10 @@ enum SpriteInk: Equatable {
   /// the artwork stay opaque. Director keys matte against white, not the
   /// sprite's `backColor`.
   case matte
+  /// Ink 3 ("ghost"): QuickDraw's `srcBic` — dark (non-white) source
+  /// pixels erase the destination to white, white source pixels are
+  /// transparent. The classic use is invisible/highlight buttons.
+  case ghost
 
   /// Maps a score record's raw ink number onto a renderer mode. Unhandled
   /// inks fall back to `backgroundTransparent`, which was the renderer's
@@ -22,9 +26,16 @@ enum SpriteInk: Equatable {
   init(inkNumber: Int) {
     switch inkNumber {
     case 0: self = .copy
+    case 3: self = .ghost
     case 8: self = .matte
     default: self = .backgroundTransparent
     }
+  }
+
+  /// Whether the ink keys transparency against white rather than the
+  /// sprite's `backColor` palette index.
+  var keysWhite: Bool {
+    self == .matte || self == .ghost
   }
 
   /// Stable 2-bit value for texture cache keys.
@@ -33,6 +44,7 @@ enum SpriteInk: Equatable {
     case .copy: return 0
     case .backgroundTransparent: return 1
     case .matte: return 2
+    case .ghost: return 3
     }
   }
 }
