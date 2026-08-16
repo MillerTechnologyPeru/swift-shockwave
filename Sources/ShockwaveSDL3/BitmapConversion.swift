@@ -9,7 +9,8 @@ enum BitmapConversion {
   ///     opaque; `.backgroundTransparent` keys out every pixel matching the
   ///     sprite's `backColor`; `.matte` keys out only the white region
   ///     connected to the bitmap's edges (white pixels enclosed by the
-  ///     artwork stay opaque).
+  ///     artwork stay opaque); `.ghost` turns non-white pixels white and
+  ///     white pixels transparent.
   ///   - backColorIndex: the sprite record's own `backColor` — the palette
   ///     index Director actually keys transparency against for indexed
   ///     bitmaps, not necessarily white. Ignored for direct-color depths
@@ -49,8 +50,8 @@ enum BitmapConversion {
     case 1:
       // A 1-bit image's implicit 2-entry palette is {white, black} at
       // indices {0, 1}. Background-transparent keys whichever index
-      // backColor names; matte keys white (bit 0).
-      let keyBit = ink == .matte ? 0 : backColorIndex & 1
+      // backColor names; matte and ghost key white (bit 0).
+      let keyBit = ink.keysWhite ? 0 : backColorIndex & 1
       for y in 0..<height {
         let row = y * rowBytes
         for x in 0..<width {
@@ -64,10 +65,10 @@ enum BitmapConversion {
         }
       }
     case 8:
-      // Matte keys against white — the palette entry that actually renders
-      // white — not the sprite's backColor.
+      // Matte and ghost key against white — the palette entry that actually
+      // renders white — not the sprite's backColor.
       let whiteIndex = palette.firstIndex { $0.red == 255 && $0.green == 255 && $0.blue == 255 }
-      let keyIndex = ink == .matte ? (whiteIndex ?? -1) : backColorIndex
+      let keyIndex = ink.keysWhite ? (whiteIndex ?? -1) : backColorIndex
       for y in 0..<height {
         let row = y * rowBytes
         for x in 0..<width {
@@ -129,6 +130,17 @@ enum BitmapConversion {
       }
     case .matte:
       clearEdgeConnectedRegion(keyed: keyed, width: width, height: height, output: &output)
+    case .ghost:
+      // srcBic: dark pixels erase to white, white pixels vanish.
+      for index in 0..<keyed.count {
+        if keyed[index] {
+          output[index * 4 + 3] = 0
+        } else {
+          output[index * 4] = 255
+          output[index * 4 + 1] = 255
+          output[index * 4 + 2] = 255
+        }
+      }
     }
     return output
   }
