@@ -13,6 +13,9 @@ public final class MoviePlayer: LingoVMHost {
   /// Everything `put` writes, in order — the headless stand-in for the
   /// message window.
   public private(set) var transcript: [String] = []
+  /// Script names `new(script(...))` failed to resolve, so each is reported
+  /// only the first time.
+  private var unresolvedScripts: Set<String> = []
 
   /// The frame the playhead is on; 0 before `start()`.
   public internal(set) var currentFrame = 0
@@ -93,8 +96,17 @@ public final class MoviePlayer: LingoVMHost {
   }
 
   public func makeObject(scriptName: String, args: [LingoValue]) -> LingoObject? {
-    guard let member = scriptMember(named: scriptName) else { return nil }
+    guard let member = scriptMember(named: scriptName) else {
+      reportUnresolvedScript(scriptName)
+      return nil
+    }
     return instantiate(member, args: args)
+  }
+
+  /// Notes a script name that failed to resolve, once per name.
+  func reportUnresolvedScript(_ name: String) {
+    guard unresolvedScripts.insert(name).inserted else { return }
+    transcript.append("no script cast member named \"\(name)\"")
   }
 
   private func instantiate(_ member: CastMember, args: [LingoValue]) -> ScriptInstance {
@@ -161,6 +173,12 @@ public final class MoviePlayer: LingoVMHost {
       if let member = self.member(id, castLib: args[safe: 1]) {
         return .object(member)
       }
+      // An unresolved `script("name")` yields VOID rather than raising, so
+      // `new(script("name"))` quietly produces VOID too and every later
+      // call on it does nothing. That can disable an entire subsystem
+      // invisibly, so report each missing name once.
+      if case .string(let name) = id { self.reportUnresolvedScript(name) }
+      if case .symbol(let name) = id { self.reportUnresolvedScript(name) }
       return .void
     }
     environment.registerGlobalFunction("new") { [weak self] args in
