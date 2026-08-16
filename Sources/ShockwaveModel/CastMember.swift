@@ -29,6 +29,11 @@ public final class CastMember: LingoObject {
   private var scriptTextOverride: String?
   private var dynamicProperties: [String: LingoValue] = [:]
 
+  /// The member's authored text (from its `STXT` chunk), or `nil` for
+  /// members without one. Scripts overwrite it through the `text` property;
+  /// this keeps the movie's original.
+  public let authoredText: String?
+
   public init(
     libraryNumber: Int,
     memberNumber: Int,
@@ -36,6 +41,7 @@ public final class CastMember: LingoObject {
     scriptChunk: ScriptChunk?,
     scriptNames: [String] = [],
     scriptUsesCapitalContext: Bool = false,
+    authoredText: String? = nil,
     environment: LingoEnvironment
   ) {
     self.libraryNumber = libraryNumber
@@ -44,7 +50,15 @@ public final class CastMember: LingoObject {
     self.scriptChunk = scriptChunk
     self.scriptNames = scriptNames
     self.scriptUsesCapitalContext = scriptUsesCapitalContext
+    self.authoredText = authoredText
     super.init(environment: environment)
+  }
+
+  /// The member's current text: a script-set value wins, else the authored
+  /// `STXT` content.
+  public var text: String? {
+    if let override = dynamicProperties["text"] { return override.asString() }
+    return authoredText
   }
 
   /// `castLibIndex - 1` in the high 16 bits, member number in the low 16 —
@@ -75,6 +89,11 @@ public final class CastMember: LingoObject {
     case "castlibnum": return .integer(libraryNumber)
     case "type", "casttype": return .symbol(chunk.type.lingoSymbolName)
     case "scripttext": return .string(scriptTextOverride ?? chunk.scriptText ?? "")
+    case "text":
+      // `member(...).text` — dynamic writes win over the authored STXT
+      // content; a member with neither answers empty string, as Lingo does.
+      if let value = dynamicProperties["text"] { return value }
+      return .string(authoredText ?? "")
     default:
       if let value = dynamicProperties[name.asciiLowercased()] {
         return value
