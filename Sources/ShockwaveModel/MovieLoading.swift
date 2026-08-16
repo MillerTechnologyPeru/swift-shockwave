@@ -117,12 +117,19 @@ extension Movie {
       }
     }
 
-    // Field text (`STXT`) hangs off the member's own `CASt` chunk in the
-    // key table, the same owned-by relationship bitmaps use for `BITD`.
+    // Text hangs off the member's own `CASt` chunk in the key table, the
+    // same owned-by relationship bitmaps use for `BITD`: fields carry an
+    // `STXT`, text xtras (rich text — junkbot's level definitions and
+    // runtime messages) carry an `XMED`.
     var textChunkIds: [Int: Int] = [:]
-    for relationship in keyTable?.entries ?? []
-    where relationship.fourCC == "STXT" && relationship.childChunkIndex < file.chunkMap.count {
-      textChunkIds[relationship.ownerChunkIndex] = relationship.childChunkIndex
+    var mediaChunkIds: [Int: Int] = [:]
+    for relationship in keyTable?.entries ?? [] {
+      guard relationship.childChunkIndex < file.chunkMap.count else { continue }
+      if relationship.fourCC == "STXT" {
+        textChunkIds[relationship.ownerChunkIndex] = relationship.childChunkIndex
+      } else if relationship.fourCC == "XMED" {
+        mediaChunkIds[relationship.ownerChunkIndex] = relationship.childChunkIndex
+      }
     }
 
     let firstMemberNumber = entry.minMember ?? 1
@@ -134,6 +141,10 @@ extension Movie {
       var authoredText: String?
       if let textId = textChunkIds[memberId] {
         authoredText = try? file.textChunk(at: file.chunkMap[textId]).text
+      } else if let mediaId = mediaChunkIds[memberId],
+        let data = try? file.chunkData(at: file.chunkMap[mediaId])
+      {
+        authoredText = XMediaText.text(from: data)
       }
       members[memberNumber] = CastMember(
         libraryNumber: libraryNumber, memberNumber: memberNumber, chunk: chunk,
