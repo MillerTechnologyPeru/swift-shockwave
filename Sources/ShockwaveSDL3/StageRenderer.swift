@@ -69,6 +69,9 @@ final class StageRenderer {
         for: member, properties: properties, ink: SpriteInk(inkNumber: record.ink),
         backColorIndex: record.backColor)
     else { return }
+    // Blend is per-sprite while textures are shared, so the modulation has
+    // to be reapplied on every draw rather than baked into the texture.
+    SDL_SetTextureAlphaMod(texture, UInt8(record.blendPercent * 255 / 100))
     SDL_RenderTexture(renderer, texture, nil, &destination)
   }
 
