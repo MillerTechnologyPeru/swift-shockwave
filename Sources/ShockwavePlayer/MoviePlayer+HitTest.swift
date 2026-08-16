@@ -31,6 +31,15 @@ extension MoviePlayer {
     return movieModel.castManager.library(fileNumber: record.castLib)?.member(record.member)
   }
 
+  /// The score record covering a sprite channel on the current frame, or
+  /// `nil` when the channel is empty there.
+  public func currentRecord(forSprite spriteNumber: Int) -> SpriteChannelRecord? {
+    guard let score = movieModel.score, currentFrame >= 1,
+      currentFrame <= score.chunk.frames.count
+    else { return nil }
+    return score.chunk.frames[currentFrame - 1].spriteRecord(channel: spriteNumber + 5)
+  }
+
   /// Whether a sprite channel is currently showing.
   ///
   /// Scripts hide and reveal whole groups of sprites by setting
