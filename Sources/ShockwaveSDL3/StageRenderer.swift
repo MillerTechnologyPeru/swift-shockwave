@@ -88,11 +88,12 @@ final class StageRenderer {
     guard let castId = castChunkId(of: member),
       let bitdId = bitmapDataIds[castId],
       let data = try? file.chunkData(at: file.chunkMap[bitdId]),
-      let pixels = BitmapData.decode(data, expectedByteCount: properties.decodedByteCount),
+      let decoded = BitmapData.decode(data, expectedByteCount: properties.decodedByteCount),
       let rgba = BitmapConversion.rgba(
-        pixels: pixels, properties: properties,
+        pixels: decoded.pixels, properties: properties,
         palette: BuiltinPalette.colors(forMember: properties.paletteMember),
-        transparent: transparent, backColorIndex: backColorIndex)
+        transparent: transparent, backColorIndex: backColorIndex,
+        sourcePlanar: decoded.wasCompressed)
     else { return nil }
 
     let width = Int32(properties.bounds.width)
