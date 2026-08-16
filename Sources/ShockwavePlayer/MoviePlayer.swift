@@ -112,7 +112,7 @@ public final class MoviePlayer: LingoVMHost {
   private func instantiate(_ member: CastMember, args: [LingoValue]) -> ScriptInstance {
     let instance = ScriptInstance(member: member, player: self)
     if instance.handler(named: "new") != nil {
-      _ = instance.callMethod("new", args: [.object(instance)] + args)
+      _ = instance.callMethod("new", args: args)
     }
     return instance
   }
@@ -228,7 +228,7 @@ public final class MoviePlayer: LingoVMHost {
       }
       for (_, instances) in self.activeSpans.sorted(by: { $0.key < $1.key }) {
         for instance in instances where instance.handler(named: name) != nil {
-          _ = instance.callMethod(name, args: [.object(instance)] + Array(args.dropFirst()))
+          _ = instance.callMethod(name, args: Array(args.dropFirst()))
         }
       }
       return .void
