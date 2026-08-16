@@ -18,22 +18,57 @@ public struct SpriteRect: Equatable, Sendable {
 }
 
 extension MoviePlayer {
+  /// The cast member a sprite channel actually shows: the score record's
+  /// own reference, unless the running Lingo has puppeted a different
+  /// member onto the channel.
+  public func effectiveMember(_ record: SpriteChannelRecord, spriteNumber: Int) -> CastMember? {
+    if let sprite = sprite(.integer(spriteNumber)),
+      case .object(let memberObject) = sprite.getProperty("member"),
+      let castMember = memberObject as? CastMember
+    {
+      return castMember
+    }
+    return movieModel.castManager.library(fileNumber: record.castLib)?.member(record.member)
+  }
+
   /// The on-stage rect for a sprite channel record, with any puppeted
   /// `locH`/`locV` override applied — the same geometry `StageRenderer`
   /// draws with, factored out so hit-testing and rendering can't drift.
-  /// Registration-point offsetting for scaled/non-bitmap members isn't
-  /// modeled yet.
+  ///
+  /// Two things make this more than the record's own numbers. The record's
+  /// `locH`/`locV` locate the member's *registration point*, not its
+  /// top-left corner, so the registration offset comes back off to get the
+  /// corner. And the record's `width`/`height` are only the drawn size when
+  /// the sprite is stretched; otherwise the member's natural bounds win,
+  /// and the record's stale values are ignored.
   public func spriteRect(_ record: SpriteChannelRecord, spriteNumber: Int) -> SpriteRect {
-    var rect = SpriteRect(
-      left: record.left, top: record.top, width: record.width, height: record.height)
-    if let sprite = sprite(.integer(spriteNumber)),
-      let locH = sprite.getProperty("locH").asInteger(),
-      let locV = sprite.getProperty("locV").asInteger()
+    var width = record.width
+    var height = record.height
+    var regX = 0
+    var regY = 0
+    if let properties = effectiveMember(record, spriteNumber: spriteNumber)?
+      .chunk.bitmapProperties
     {
-      rect.left = locH
-      rect.top = locV
+      let natural = properties.bounds
+      if !record.stretch {
+        width = natural.width
+        height = natural.height
+      }
+      // Stretching scales the registration offset along with the artwork.
+      regX = natural.width > 0 ? properties.regX * width / natural.width : properties.regX
+      regY = natural.height > 0 ? properties.regY * height / natural.height : properties.regY
     }
-    return rect
+
+    var locH = record.left
+    var locV = record.top
+    if let sprite = sprite(.integer(spriteNumber)),
+      let puppetH = sprite.getProperty("locH").asInteger(),
+      let puppetV = sprite.getProperty("locV").asInteger()
+    {
+      locH = puppetH
+      locV = puppetV
+    }
+    return SpriteRect(left: locH - regX, top: locV - regY, width: width, height: height)
   }
 
   /// The topmost sprite (Lingo sprite number) whose rect contains
