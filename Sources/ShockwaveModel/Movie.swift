@@ -1,3 +1,4 @@
+import Foundation
 import LingoRuntime
 
 /// The movie: the root Lingo object exposing the cast libraries and score
@@ -17,6 +18,9 @@ public final class Movie: LingoObject {
   // properties scripts read and write freely. Stored permissively rather
   // than enumerated, matching Lingo's own tolerance.
   private var dynamicProperties: [String: LingoValue] = [:]
+  /// When the movie was loaded — the zero point for `the ticks` and
+  /// `the milliseconds`.
+  private let loadDate = Date()
 
   public init(
     castManager: CastManager, score: Score?, fileVersion: Int = 0, frameRate: Int = 0,
@@ -32,6 +36,11 @@ public final class Movie: LingoObject {
   public override func getProperty(_ name: String) -> LingoValue {
     switch name.asciiLowercased() {
     case "castcount": return .integer(castManager.libraries.count)
+    // Director's two clocks, both counted from when the movie was loaded.
+    // Scripts use them as elapsed-time budgets ("wait 110 ticks before
+    // advancing"), so they have to actually move.
+    case "ticks": return .integer(Int(Date().timeIntervalSince(loadDate) * 60))
+    case "milliseconds": return .integer(Int(Date().timeIntervalSince(loadDate) * 1000))
     case "lastframe": return .integer(score?.frameCount ?? 0)
     default:
       if let value = dynamicProperties[name.asciiLowercased()] {
