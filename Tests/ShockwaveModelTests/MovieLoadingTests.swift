@@ -14,15 +14,31 @@ private func realMovie() throws -> Movie {
 
 @Test func realMovieLoadsAllCastLibraries() throws {
   let movie = try realMovie()
-  #expect(movie.castManager.libraries.count == 13)
-  #expect(movie.getProperty("castCount").asInteger() == 13)
+  // Thirteen listed libraries plus one the cast list never mentions.
+  #expect(movie.castManager.libraries.count == 14)
+  #expect(movie.getProperty("castCount").asInteger() == 14)
 
   let names = movie.castManager.libraries.map(\.libraryName)
   #expect(
     names == [
       "Internal", "legoparts", "catalog", "editor", "play", "peter 101", "sound",
       "levels", "dynamic", "unused levels", "screens_by_peter", "backgrounds", "loading",
+      "",
     ])
+}
+
+@Test func unlistedCastTableStillLoadsItsMembers() throws {
+  let movie = try realMovie()
+  // The sample's fourteenth cast table has no `MCsL` entry, so it has no
+  // name or member range — but it holds the `download manager` script the
+  // movie's whole screen-building path runs through.
+  let unlisted = try #require(movie.castManager.library(fileNumber: 14))
+  #expect(unlisted.libraryName.isEmpty)
+  #expect(unlisted.members.count == 28)
+  #expect(
+    unlisted.members.values.contains {
+      $0.name?.caseInsensitiveEquals("download manager") ?? false
+    })
 }
 
 @Test func internalLibraryIsEmpty() throws {
