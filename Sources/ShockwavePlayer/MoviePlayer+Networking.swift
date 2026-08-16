@@ -33,6 +33,14 @@ extension MoviePlayer {
     environment.registerGlobalFunction("checkNetConnection") { _ in .integer(1) }
     environment.registerGlobalFunction("gotoNetPage") { _ in .void }
     environment.registerGlobalFunction("netMIME") { _ in .string("") }
+    // Streaming playback checks: nothing here streams, because the whole
+    // movie is already in memory before the first frame runs. Reporting
+    // everything as arrived is what lets a movie built to wait for its own
+    // download proceed past its loading screen.
+    environment.registerGlobalFunction("frameReady") { _ in .integer(1) }
+    environment.registerGlobalFunction("mediaReady") { _ in .integer(1) }
+    environment.registerGlobalFunction("streamStatus") { _ in .void }
+    environment.registerGlobalFunction("tellStreamStatus") { _ in .void }
   }
 
   private func nextNetID() -> Int {
