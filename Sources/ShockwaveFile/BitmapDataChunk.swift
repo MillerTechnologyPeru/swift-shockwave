@@ -7,13 +7,24 @@ import Foundation
 /// every bitmap in the junkbot sample: all 1085 decode to exactly the
 /// expected size, consuming exactly the whole chunk.
 public enum BitmapData {
+  /// One decode call's result: the row-major pixel bytes, plus whether the
+  /// source chunk was actually byte-run compressed. That matters for
+  /// 16-bit-per-pixel images: a compressed source stores each row's pixels
+  /// **planar** (every high byte, then every low byte), while a raw/
+  /// uncompressed source stores them interleaved (high, low, high, low...).
+  /// Callers decoding 16bpp pixel data need to know which layout they got.
+  public struct Decoded {
+    public var pixels: [UInt8]
+    public var wasCompressed: Bool
+  }
+
   /// Decodes `data` to exactly `expectedByteCount`
   /// (`BitmapMemberProperties.decodedByteCount`) bytes of row-major pixel
   /// data, or `nil` if the data doesn't decode cleanly to that size.
-  public static func decode(_ data: Data, expectedByteCount: Int) -> [UInt8]? {
+  public static func decode(_ data: Data, expectedByteCount: Int) -> Decoded? {
     let source = [UInt8](data)
     if source.count == expectedByteCount {
-      return source
+      return Decoded(pixels: source, wasCompressed: false)
     }
     var output = [UInt8]()
     output.reserveCapacity(expectedByteCount)
@@ -33,6 +44,6 @@ public enum BitmapData {
       }
     }
     guard output.count == expectedByteCount, index == source.count else { return nil }
-    return output
+    return Decoded(pixels: output, wasCompressed: true)
   }
 }
