@@ -261,11 +261,48 @@ private func realMovieData() throws -> Data {
   bytes[6] = 1
   bytes[20] = 0xC5  // moveable + editable + score color 5
   bytes[21] = 204
+  bytes[22] = 0x10  // blend enabled
   let record = try! #require(SpriteChannelRecord(bytes: bytes))
   #expect(record.scoreColor == 5)
   #expect(record.isEditable)
   #expect(record.isMoveable)
   #expect(record.blendAmount == 204)
+  #expect(record.blendEnabled)
+  #expect(record.blendPercent == 20)
+}
+
+@Test func blendByteIsIgnoredWithoutItsFlag() {
+  var bytes = [UInt8](repeating: 0, count: 48)
+  bytes[6] = 1
+  // A junk blend byte with the flag clear must still draw fully opaque.
+  bytes[21] = 255
+  var record = try! #require(SpriteChannelRecord(bytes: bytes))
+  #expect(!record.blendEnabled)
+  #expect(record.blendPercent == 100)
+
+  // The same byte with the flag set is genuinely invisible.
+  bytes[22] = 0x10
+  record = try! #require(SpriteChannelRecord(bytes: bytes))
+  #expect(record.blendPercent == 0)
+}
+
+@Test func realMovieBlendFlagMatchesBlendBytes() throws {
+  let file = try RIFXFile.read(from: realMovieData())
+  let score = try #require(try file.score())
+  var flagged = 0
+  var nonZeroBlend = 0
+  for frame in score.frames {
+    for channel in frame.channels.keys where channel >= 6 {
+      guard let record = frame.spriteRecord(channel: channel) else { continue }
+      if record.blendEnabled { flagged += 1 }
+      if record.blendAmount != 0 { nonZeroBlend += 1 }
+      // A sprite never carries an authored blend without the flag, and
+      // never sets the flag over a junk byte.
+      #expect(record.blendEnabled == (record.blendAmount != 0))
+    }
+  }
+  #expect(flagged == 14)
+  #expect(nonZeroBlend == 14)
 }
 
 @Test func realMovieSpriteFlagsDecode() throws {
