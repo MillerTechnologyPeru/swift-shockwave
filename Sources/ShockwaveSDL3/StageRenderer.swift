@@ -41,6 +41,8 @@ final class StageRenderer {
   }
 
   private func drawSprite(_ record: SpriteChannelRecord, spriteNumber: Int, player: MoviePlayer) {
+    guard player.isSpriteVisible(spriteNumber) else { return }
+
     // Member resolution (including any Lingo puppet override) and the
     // geometry both come from the player, so rendering and hit-testing
     // can't drift apart.
