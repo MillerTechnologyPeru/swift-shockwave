@@ -10,11 +10,11 @@
 /// member refs resolve to real cast members (except those pointing into its
 /// runtime-populated casts).
 ///
-/// Bytes 22 onward are deliberately not decoded. Sources disagree about
-/// them — byte 22 is line/text thickness in the Director 6 layout but a
-/// flip-flags byte in the Director 8.5 one — and the junkbot sample can't
-/// settle it: its rotation and skew words are 0.0 in all 4576 records, and
-/// byte 22 is dominated by values that fit neither reading cleanly.
+/// Only bit 0x10 of byte 22 is decoded, as the blend-enabled flag. The rest
+/// of that byte is disputed — line/text thickness in the Director 6 layout,
+/// flip flags in the Director 8.5 one — and the junkbot sample can't settle
+/// it. Rotation and skew (bytes 28–35) are likewise left alone: they are
+/// 0.0 in all 4576 of the sample's records.
 public struct SpriteChannelRecord: Equatable, Sendable {
   public var spriteType: Int
   /// The ink mode, bits 0–5 of the ink byte. The two high bits are separate
@@ -41,12 +41,13 @@ public struct SpriteChannelRecord: Equatable, Sendable {
   public var isEditable: Bool
   /// Whether the sprite can be dragged at runtime.
   public var isMoveable: Bool
-  /// The raw blend byte. Director exposes blend as a 0–100 percentage, but
-  /// the stored encoding isn't pinned down here: the junkbot sample only
-  /// ever stores 0 (4562 records), 204, or 255, and 0 dominates — so 0
-  /// plainly means "fully opaque", not "invisible". Left raw and unused by
-  /// the renderer rather than guessed at.
+  /// The raw blend byte, meaningful only when `blendEnabled`.
   public var blendAmount: Int
+  /// Whether the blend byte carries an authored value. When clear, the
+  /// blend byte is a junk default and the sprite draws fully opaque —
+  /// which is why the junkbot sample stores 0 in 4562 records without
+  /// every sprite being invisible.
+  public var blendEnabled: Bool
 
   public init?(bytes: [UInt8]) {
     guard bytes.count >= 20 else { return nil }
@@ -68,6 +69,15 @@ public struct SpriteChannelRecord: Equatable, Sendable {
     isEditable = bytes.count > 20 && bytes[20] & 0x40 != 0
     isMoveable = bytes.count > 20 && bytes[20] & 0x80 != 0
     blendAmount = bytes.count > 21 ? Int(bytes[21]) : 0
+    blendEnabled = bytes.count > 22 && bytes[22] & 0x10 != 0
+  }
+
+  /// The sprite's opacity as Director's 0–100 percentage. The stored byte
+  /// runs backwards (0 is opaque, 255 is invisible) and only counts when
+  /// `blendEnabled`; everything else draws fully opaque.
+  public var blendPercent: Int {
+    guard blendEnabled else { return 100 }
+    return Int((Double(255 - blendAmount) * 100 / 255).rounded())
   }
 
   /// Whether the channel actually shows something (an empty channel record
