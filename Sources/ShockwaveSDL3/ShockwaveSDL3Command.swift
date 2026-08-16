@@ -23,6 +23,13 @@ struct ShockwaveSDL3Command: AsyncParsableCommand {
   @Argument(help: "Frame label or number to jump to at startup, e.g. \"mainmenu\".")
   var startFrame: String?
 
+  @Option(
+    help: "Run headless (hidden window), save a BMP of the stage to this path after stepping, then exit.")
+  var screenshot: String?
+
+  @Option(help: "How many frames to step before capturing --screenshot.")
+  var screenshotDelay: Int = 30
+
   @MainActor
   func run() async throws {
     let file = try RIFXFile.read(from: Data(contentsOf: URL(fileURLWithPath: moviePath)))
@@ -37,8 +44,10 @@ struct ShockwaveSDL3Command: AsyncParsableCommand {
     defer { SDL_Quit() }
 
     let title = URL(fileURLWithPath: moviePath).lastPathComponent
+    // SDL_WINDOW_HIDDEN; the C macro wraps SDL_UINT64_C and doesn't import.
+    let windowFlags: SDL_WindowFlags = screenshot != nil ? 0x8 : 0
     guard
-      let window = SDL_CreateWindow(title, Int32(stage.width), Int32(stage.height), 0),
+      let window = SDL_CreateWindow(title, Int32(stage.width), Int32(stage.height), windowFlags),
       let renderer = SDL_CreateRenderer(window, nil)
     else {
       throw SDLError(description: "SDL window/renderer failed: \(String(cString: SDL_GetError()))")
@@ -73,6 +82,26 @@ struct ShockwaveSDL3Command: AsyncParsableCommand {
       }
     }
     flushTranscript()
+
+    if let screenshotPath = screenshot {
+      for _ in 0..<screenshotDelay where player.isPlaying {
+        player.step()
+      }
+      flushTranscript()
+      SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255)
+      SDL_RenderClear(renderer)
+      stageRenderer.renderFrame(player.currentFrame, player: player)
+      guard let surface = SDL_RenderReadPixels(renderer, nil) else {
+        throw SDLError(description: "SDL_RenderReadPixels failed: \(String(cString: SDL_GetError()))")
+      }
+      defer { SDL_DestroySurface(surface) }
+      guard SDL_SaveBMP(surface, screenshotPath) else {
+        throw SDLError(description: "SDL_SaveBMP failed: \(String(cString: SDL_GetError()))")
+      }
+      print("saved frame \(player.currentFrame) to \(screenshotPath)")
+      player.stop()
+      return
+    }
 
     var running = true
     var event = SDL_Event()
