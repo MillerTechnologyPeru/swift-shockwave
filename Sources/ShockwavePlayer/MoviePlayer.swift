@@ -69,7 +69,8 @@ public final class MoviePlayer: LingoVMHost {
   public func sprite(_ channel: LingoValue) -> LingoObject? {
     guard let number = channel.asInteger() else { return nil }
     if let sprite = sprites[number] { return sprite }
-    let sprite = Sprite(spriteNumber: number, environment: movieModel.lingoEnvironment)
+    let sprite = Sprite(
+      spriteNumber: number, player: self, environment: movieModel.lingoEnvironment)
     sprites[number] = sprite
     return sprite
   }
@@ -165,6 +166,23 @@ public final class MoviePlayer: LingoVMHost {
     environment.registerGlobalFunction("put") { [weak self] args in
       self?.transcript.append(args.map { $0.asString() }.joined(separator: " "))
       return .void
+    }
+    // `sprite(n)` and `member(...)` as expressions, which scripts hold onto
+    // and address later (`s = sprite(15)` … `s.visible = 0`). The VM reaches
+    // the host directly for the `the locV of sprite n` spelling, but the
+    // call spelling is an ordinary function and needs registering, or it
+    // yields VOID and every later use of the reference quietly does nothing.
+    environment.registerGlobalFunction("sprite") { [weak self] args in
+      guard let self, let channel = args.first, let sprite = self.sprite(channel) else {
+        return .void
+      }
+      return .object(sprite)
+    }
+    environment.registerGlobalFunction("member") { [weak self] args in
+      guard let self, let id = args.first,
+        let member = self.member(id, castLib: args[safe: 1])
+      else { return .void }
+      return .object(member)
     }
     // `new(script("name"))` compiles to two chained ExtCalls, not NewObj:
     // `script` resolves the member, `new` instantiates it.
