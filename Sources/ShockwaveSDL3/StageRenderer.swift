@@ -50,18 +50,73 @@ final class StageRenderer {
     var destination = SDL_FRect(
       x: Float(rect.left), y: Float(rect.top), w: Float(rect.width), h: Float(rect.height))
 
-    guard let member = player.effectiveMember(record, spriteNumber: spriteNumber),
-      let properties = member.chunk.bitmapProperties
-    else { return }
-    guard
-      let texture = texture(
+    guard let member = player.effectiveMember(record, spriteNumber: spriteNumber) else { return }
+
+    let texture: UnsafeMutablePointer<SDL_Texture>?
+    if let properties = member.chunk.bitmapProperties {
+      texture = self.texture(
         for: member, properties: properties, ink: SpriteInk(inkNumber: record.ink),
         backColorIndex: record.backColor)
-    else { return }
+    } else {
+      texture = textTexture(for: member, record: record, rect: rect)
+    }
+    guard let texture else { return }
     // Blend is per-sprite while textures are shared, so the modulation has
     // to be reapplied on every draw rather than baked into the texture.
     SDL_SetTextureAlphaMod(texture, UInt8(record.blendPercent * 255 / 100))
     SDL_RenderTexture(renderer, texture, nil, &destination)
+  }
+
+  /// A texture for a text-bearing member (field, text xtra, button) showing
+  /// its current `text` — which scripts rewrite at runtime, so the cache
+  /// invalidates on content or color change, not just member identity.
+  private struct TextEntry {
+    var text: String
+    var colorIndex: Int
+    var texture: UnsafeMutablePointer<SDL_Texture>?
+  }
+  private var textTextures: [Int: TextEntry] = [:]
+
+  private func textTexture(
+    for member: CastMember, record: SpriteChannelRecord, rect: SpriteRect
+  ) -> UnsafeMutablePointer<SDL_Texture>? {
+    switch member.chunk.type {
+    case .field, .button, .richText, .xtra: break
+    default: return nil
+    }
+    guard let text = member.text, !text.isEmpty, rect.width > 0, rect.height > 0 else {
+      return nil
+    }
+
+    let key = (member.libraryNumber << 16) | member.memberNumber
+    if let cached = textTextures[key], cached.text == text,
+      cached.colorIndex == record.foreColor
+    {
+      return cached.texture
+    }
+    if let stale = textTextures.removeValue(forKey: key)?.texture {
+      SDL_DestroyTexture(stale)
+    }
+
+    // The sprite's foreColor is a palette index; junkbot is a Windows-built
+    // movie, so System-Win is the palette its authored indices assume.
+    let color = BuiltinPalette.systemWin[record.foreColor & 0xFF]
+    guard
+      let rgba = TextRasterizer.rgba(
+        text: text, width: rect.width, height: rect.height, color: color, fontSize: 12),
+      let texture = SDL_CreateTexture(
+        renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC,
+        Int32(rect.width), Int32(rect.height))
+    else {
+      textTextures[key] = TextEntry(text: text, colorIndex: record.foreColor, texture: nil)
+      return nil
+    }
+    rgba.withUnsafeBytes { buffer in
+      _ = SDL_UpdateTexture(texture, nil, buffer.baseAddress, Int32(rect.width) * 4)
+    }
+    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND)
+    textTextures[key] = TextEntry(text: text, colorIndex: record.foreColor, texture: texture)
+    return texture
   }
 
   private func texture(
