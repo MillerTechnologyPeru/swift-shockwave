@@ -201,10 +201,10 @@ private func realMovieData() throws -> Data {
     let member = try file.castMember(at: file.chunkMap[ownerId])
     guard let properties = member.bitmapProperties else { continue }
     let data = try file.chunkData(at: file.chunkMap[bitdId])
-    let pixels = try #require(
+    let decoded_ = try #require(
       BitmapData.decode(data, expectedByteCount: properties.decodedByteCount),
       "bitmap \(ownerId) failed to decode")
-    #expect(pixels.count == properties.decodedByteCount)
+    #expect(decoded_.pixels.count == properties.decodedByteCount)
     if data.count == properties.decodedByteCount { raw += 1 } else { decoded += 1 }
   }
   #expect(decoded == 1054)
