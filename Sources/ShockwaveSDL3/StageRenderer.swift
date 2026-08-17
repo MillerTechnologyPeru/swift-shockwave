@@ -109,6 +109,21 @@ final class StageRenderer {
     return texture
   }
 
+  /// Which pixels a text member paints when drawn into `width`×`height`,
+  /// for the player's pointer hit-testing.
+  static func textCoverage(of member: CastMember, width: Int, height: Int) -> [Bool]? {
+    guard member.isTextMember, let text = member.text, !text.isEmpty else { return nil }
+    let layout = member.textLayout
+    guard
+      let rgba = TextRasterizer.rgba(
+        text: text, width: width, height: height,
+        color: PaletteChunk.Color(red: 0, green: 0, blue: 0),
+        fontName: layout.fontName, fontSize: Double(layout.fontSize),
+        fixedLineSpace: layout.fixedLineSpace, alignment: layout.alignment)
+    else { return nil }
+    return stride(from: 3, to: rgba.count, by: 4).map { rgba[$0] != 0 }
+  }
+
   /// The height a text member's content needs at `width`, for the player's
   /// auto-sizing text sprites.
   static func textHeight(of member: CastMember, width: Int) -> Int {
