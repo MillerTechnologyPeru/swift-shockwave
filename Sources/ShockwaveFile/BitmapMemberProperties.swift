@@ -47,10 +47,18 @@ public struct BitmapMemberProperties: Equatable, Sendable {
     bitsPerPixel = Int(bytes[23])
     if bytes.count >= 28 {
       paletteCastLib = i16(24)
-      paletteMember = i16(26)
+      // The stored built-in id is one HIGHER than Lingo's numbering: the
+      // file says 0 for System-Mac, -6 for Metallic, -7 for Web 216, -100
+      // for System-Win — Lingo names those -1, -7, -8, -101. Positive
+      // values are ordinary palette cast member numbers and pass through.
+      // Normalized here so every consumer sees Lingo's ids; misreading the
+      // stored -7 as Metallic drew junkbot's Web-216 UI in the wrong
+      // colors (mid gray came out as a dusky pink). Matches dirplayer-rs.
+      let stored = i16(26)
+      paletteMember = stored <= 0 ? stored - 1 : stored
     } else {
       paletteCastLib = 0
-      paletteMember = 0
+      paletteMember = -1
     }
   }
 
