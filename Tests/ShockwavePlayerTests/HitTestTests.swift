@@ -19,11 +19,14 @@ private func realPlayer() throws -> MoviePlayer {
   player.jump(to: 26)
 
   // Frame 26 has two channels covering (600, 100): channel 6 (sprite 1,
-  // rect 566,88,148,130) and channel 7 (sprite 2, rect 0,0,650,420, the
-  // full-stage backdrop). Channel 7 is higher, and higher channels draw
-  // on top, so sprite 2 wins even though sprite 1's smaller rect also
-  // contains the point.
-  #expect(player.spriteAt(x: 600, y: 100) == 2)
+  // the portrait, rect 560,83,148,130) and channel 7 (sprite 2, the
+  // full-stage level screen, ink 36). Channel 7 draws on top, but its
+  // background-transparent ink keys out the window the portrait shows
+  // through, and the pointer falls through keyed pixels — so the portrait
+  // takes the hit there, while the screen's painted frame at (5, 5)
+  // takes it itself.
+  #expect(player.spriteAt(x: 600, y: 100) == 1)
+  #expect(player.spriteAt(x: 5, y: 5) == 2)
 
   // (100, 320) additionally falls inside channel 16 (sprite 11, rect
   // 92,39,215,324), above the backdrop. Channel 64 (sprite 59) is a 44x26
@@ -61,3 +64,4 @@ private func realPlayer() throws -> MoviePlayer {
   #expect(player.spriteAt(x: 600, y: 100) == 1)
   #expect(player.spriteAt(x: 3000, y: 3000) == 2)
 }
+
