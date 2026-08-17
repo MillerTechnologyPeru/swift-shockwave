@@ -31,6 +31,12 @@ struct ShockwaveSDL3Command: AsyncParsableCommand {
   @Option(help: "How many frames to step before capturing --screenshot.")
   var screenshotDelay: Int = 30
 
+  @Option(
+    help:
+      "Headless only: click the stage at X,Y (movie coordinates) after --screenshot-delay frames, then step as many frames again before capturing. Repeatable."
+  )
+  var click: [String] = []
+
   @MainActor
   func run() async throws {
     let file = try RIFXFile.read(from: Data(contentsOf: URL(fileURLWithPath: moviePath)))
@@ -81,9 +87,24 @@ struct ShockwaveSDL3Command: AsyncParsableCommand {
       // Paced at the movie's own tempo rather than run flat out: scripts
       // gate on `the ticks`, so a loop with no elapsed time between frames
       // never satisfies them.
-      for _ in 0..<screenshotDelay where player.isPlaying {
-        player.step()
-        SDL_Delay(UInt32(player.frameDelayMs.rounded()))
+      func stepAWhile() {
+        for _ in 0..<screenshotDelay where player.isPlaying {
+          player.step()
+          SDL_Delay(UInt32(player.frameDelayMs.rounded()))
+        }
+      }
+      stepAWhile()
+      for spec in click {
+        let parts = spec.split(separator: ",").compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+        guard parts.count == 2 else {
+          print("bad --click \(spec); expected X,Y")
+          continue
+        }
+        let hit = player.spriteAt(x: parts[0], y: parts[1])
+        player.dispatch("mouseDown", toSprite: hit)
+        player.dispatch("mouseUp", toSprite: hit)
+        print("clicked \(parts[0]),\(parts[1]) -> sprite \(hit.map(String.init) ?? "none")")
+        stepAWhile()
       }
       flushTranscript()
       try renderer.setDrawColor(red: 255, green: 255, blue: 255, alpha: 255)
