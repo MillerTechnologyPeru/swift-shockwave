@@ -49,6 +49,39 @@ public struct SpriteChannelRecord: Equatable, Sendable {
   /// every sprite being invisible.
   public var blendEnabled: Bool
 
+  /// A record for a channel the score never touched — the starting point
+  /// for a sprite that exists only because Lingo puppeted it (`sprite(300)
+  /// .member = ...`). Nothing shown, ink copy, no blend, positioned at the
+  /// origin; the puppeted properties fill in the rest.
+  public static let empty = SpriteChannelRecord(
+    spriteType: 0, ink: 0, trails: false, stretch: false, foreColor: 255, backColor: 0,
+    castLib: 0, member: 0, top: 0, left: 0, height: 0, width: 0, scoreColor: 0,
+    isEditable: false, isMoveable: false, blendAmount: 0, blendEnabled: false)
+
+  public init(
+    spriteType: Int, ink: Int, trails: Bool, stretch: Bool, foreColor: Int, backColor: Int,
+    castLib: Int, member: Int, top: Int, left: Int, height: Int, width: Int, scoreColor: Int,
+    isEditable: Bool, isMoveable: Bool, blendAmount: Int, blendEnabled: Bool
+  ) {
+    self.spriteType = spriteType
+    self.ink = ink
+    self.trails = trails
+    self.stretch = stretch
+    self.foreColor = foreColor
+    self.backColor = backColor
+    self.castLib = castLib
+    self.member = member
+    self.top = top
+    self.left = left
+    self.height = height
+    self.width = width
+    self.scoreColor = scoreColor
+    self.isEditable = isEditable
+    self.isMoveable = isMoveable
+    self.blendAmount = blendAmount
+    self.blendEnabled = blendEnabled
+  }
+
   public init?(bytes: [UInt8]) {
     guard bytes.count >= 20 else { return nil }
     func u16(_ offset: Int) -> Int { Int(bytes[offset]) << 8 | Int(bytes[offset + 1]) }
