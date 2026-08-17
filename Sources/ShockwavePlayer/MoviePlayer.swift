@@ -82,15 +82,12 @@ public final class MoviePlayer: LingoVMHost {
       if let library { return library.member(number) }
       return movieModel.castManager.member(number: number)
     case .string(let name), .symbol(let name):
-      let libraries = library.map { [$0] } ?? movieModel.castManager.libraries
-      for library in libraries {
-        if let member = library.members.values.first(where: {
+      if let library {
+        return library.members.values.first {
           $0.name?.caseInsensitiveEquals(name) ?? false
-        }) {
-          return member
         }
       }
-      return nil
+      return movieModel.castManager.member(named: name)
     default:
       return nil
     }
@@ -128,15 +125,7 @@ public final class MoviePlayer: LingoVMHost {
   }
 
   private func scriptMember(named name: String) -> CastMember? {
-    var fallback: CastMember?
-    for library in movieModel.castManager.libraries {
-      for member in library.members.values where member.chunk.type == .script {
-        guard member.name?.caseInsensitiveEquals(name) ?? false else { continue }
-        if member.scriptType == .parent { return member }
-        if fallback == nil { fallback = member }
-      }
-    }
-    return fallback
+    movieModel.castManager.scriptMember(named: name)
   }
 
   private func registerMovieHandlers() {
