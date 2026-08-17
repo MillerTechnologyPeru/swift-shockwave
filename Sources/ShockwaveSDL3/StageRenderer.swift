@@ -161,25 +161,11 @@ final class StageRenderer {
     return texture
   }
 
-  /// Finds the member's `CASt` chunk id by re-walking its library's `CAS*`
-  /// table (member number − minMember = slot).
-  private var castIdCache: [Int: Int] = [:]
+  /// The member's `CASt` chunk id — the owner its `BITD` hangs off. Carried
+  /// by the member itself from load time; re-deriving it from the cast
+  /// table by slot arithmetic went wrong whenever a cast's first slots were
+  /// empty (member numbers no longer line up with table positions).
   private func castChunkId(of member: CastMember) -> Int? {
-    let cacheKey = (member.libraryNumber << 16) | member.memberNumber
-    if let cached = castIdCache[cacheKey] { return cached }
-    guard let library = movie.castManager.library(number: member.libraryNumber),
-      let fileNumber = library.fileNumber,
-      let keyTable = try? file.keyTable(),
-      let tableEntry = keyTable.entries.first(where: {
-        $0.fourCC == "CAS*" && $0.ownerChunkIndex == (fileNumber << 16 | 1024)
-      }),
-      let table = try? file.castTable(at: file.chunkMap[tableEntry.childChunkIndex])
-    else { return nil }
-    let minMember = library.members.keys.min() ?? 1
-    let slot = member.memberNumber - minMember
-    guard slot >= 0, slot < table.memberIds.count else { return nil }
-    let id = table.memberIds[slot]
-    castIdCache[cacheKey] = id
-    return id
+    member.chunkId
   }
 }
