@@ -101,6 +101,14 @@ public final class MoviePlayer: LingoVMHost {
     return instantiate(member, args: args)
   }
 
+  /// Notes a handler the VM abandoned mid-way. Director would put up an
+  /// alert; here the message lands in `transcript`, where a headless run
+  /// can read it, so a handler that dies quietly doesn't masquerade as a
+  /// rendering bug.
+  func reportScriptError(_ message: String) {
+    transcript.append("script error: \(message)")
+  }
+
   /// Notes a script name that failed to resolve, once per name.
   func reportUnresolvedScript(_ name: String) {
     guard unresolvedScripts.insert(name).inserted else { return }
@@ -139,11 +147,15 @@ public final class MoviePlayer: LingoVMHost {
           movieModel.lingoEnvironment.registerGlobalFunction(handlerName) {
             [weak self] args in
             guard let self else { return .void }
-            let result = try? LingoVM.call(
-              handler: handler, chunk: chunk, names: member.scriptNames, args: args,
-              receiver: nil, host: self, environment: self.movieModel.lingoEnvironment,
-              version: self.lingoVersion, capitalX: member.scriptUsesCapitalContext)
-            return result ?? .void
+            do {
+              return try LingoVM.call(
+                handler: handler, chunk: chunk, names: member.scriptNames, args: args,
+                receiver: nil, host: self, environment: self.movieModel.lingoEnvironment,
+                version: self.lingoVersion, capitalX: member.scriptUsesCapitalContext)
+            } catch {
+              self.reportScriptError("\(handlerName): \(error)")
+              return .void
+            }
           }
         }
       }
@@ -216,10 +228,10 @@ public final class MoviePlayer: LingoVMHost {
       guard let self, let target = args.first else { return .void }
       switch target {
       case .integer(let frame):
-        self.nextFrame = frame
+        self.go(to: frame)
       case .string(let name), .symbol(let name):
         if let frame = self.movieModel.score?.frame(labeled: name) {
-          self.nextFrame = frame
+          self.go(to: frame)
         }
       default:
         break
