@@ -84,6 +84,7 @@ extension Movie {
     var textChunkIds: [Int: Int] = [:]
     var mediaChunkIds: [Int: Int] = [:]
     var bitmapChunkIds: [Int: Int] = [:]
+    var filmLoopScoreIds: [Int: Int] = [:]
     for relationship in keyTable?.entries ?? [] {
       guard relationship.childChunkIndex < file.chunkMap.count else { continue }
       if relationship.fourCC == "STXT" {
@@ -92,6 +93,9 @@ extension Movie {
         mediaChunkIds[relationship.ownerChunkIndex] = relationship.childChunkIndex
       } else if relationship.fourCC == "BITD" {
         bitmapChunkIds[relationship.ownerChunkIndex] = relationship.childChunkIndex
+      } else if relationship.fourCC == "SCVW" || relationship.fourCC == "VWSC" {
+        // A film loop's frames: a score chunk owned by the member.
+        filmLoopScoreIds[relationship.ownerChunkIndex] = relationship.childChunkIndex
       }
     }
 
@@ -115,11 +119,16 @@ extension Movie {
       if chunk.type == .bitmap, let bitmapId = bitmapChunkIds[memberId] {
         bitmapData = try? file.chunkData(at: file.chunkMap[bitmapId])
       }
+      var filmLoopScore: ScoreChunk?
+      if chunk.type == .filmLoop, let scoreId = filmLoopScoreIds[memberId] {
+        filmLoopScore = try? file.score(at: file.chunkMap[scoreId])
+      }
       members[memberNumber] = CastMember(
         libraryNumber: libraryNumber, memberNumber: memberNumber, chunkId: memberId, chunk: chunk,
         scriptChunk: scriptChunk, scriptNames: scriptNames,
         scriptUsesCapitalContext: capitalContext, authoredText: authoredText,
-        textStyle: textStyle, bitmapData: bitmapData, environment: environment)
+        textStyle: textStyle, bitmapData: bitmapData, filmLoopScore: filmLoopScore,
+        environment: environment)
     }
     return members
   }
