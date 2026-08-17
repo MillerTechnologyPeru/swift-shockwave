@@ -100,6 +100,22 @@ public final class CastMember: LingoObject {
       // content; a member with neither answers empty string, as Lingo does.
       if let value = dynamicProperties["text"] { return value }
       return .string(authoredText ?? "")
+    // A bitmap's natural size and registration point — what
+    // `s.width = s.member.width * scale` and `loc - member.regPoint` read.
+    case "width":
+      guard let bitmap = chunk.bitmapProperties else { return super.getProperty(name) }
+      return .integer(bitmap.bounds.width)
+    case "height":
+      guard let bitmap = chunk.bitmapProperties else { return super.getProperty(name) }
+      return .integer(bitmap.bounds.height)
+    case "regpoint":
+      guard let bitmap = chunk.bitmapProperties else { return super.getProperty(name) }
+      return .list([.integer(bitmap.regX), .integer(bitmap.regY)])
+    case "rect":
+      guard let bitmap = chunk.bitmapProperties else { return super.getProperty(name) }
+      return .list([
+        .integer(0), .integer(0), .integer(bitmap.bounds.width), .integer(bitmap.bounds.height),
+      ])
     default:
       if let value = dynamicProperties[name.asciiLowercased()] {
         return value
