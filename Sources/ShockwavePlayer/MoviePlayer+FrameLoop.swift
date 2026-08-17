@@ -135,6 +135,19 @@ extension MoviePlayer {
     for index in previous.subtracting(current).sorted(by: >) {
       closeSpan(index)
     }
+    // Channels whose span ended (or is being replaced) drop what Lingo
+    // puppeted onto them before the new spans' `beginSprite` runs — that
+    // is where the next span's own puppeting starts — and a film loop
+    // arriving with a new span starts over.
+    if let score = movieModel.score {
+      let ended = previous.subtracting(current).compactMap { score.spans[$0].spriteNumber }
+      let started = current.subtracting(previous).compactMap { score.spans[$0].spriteNumber }
+      for spriteNumber in Set(ended).union(started) {
+        existingSprite(spriteNumber)?.releasePuppetState()
+        filmLoopFrames[spriteNumber] = 0
+        if hoveredSprite == spriteNumber { hoveredSprite = nil }
+      }
+    }
     for index in current.subtracting(previous).sorted() {
       openSpan(index)
     }
