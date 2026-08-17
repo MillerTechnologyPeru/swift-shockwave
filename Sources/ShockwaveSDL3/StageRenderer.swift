@@ -22,13 +22,13 @@ final class StageRenderer {
   }
 
   func renderFrame(_ frameNumber: Int, player: MoviePlayer) {
-    for (spriteNumber, record) in player.drawOrder(forFrame: frameNumber) {
-      drawSprite(record, spriteNumber: spriteNumber, player: player)
+    for entry in player.drawOrder(forFrame: frameNumber) {
+      guard player.isSpriteVisible(entry.owner) else { continue }
+      drawSprite(entry.record, spriteNumber: entry.spriteNumber, player: player)
     }
   }
 
   private func drawSprite(_ record: SpriteChannelRecord, spriteNumber: Int, player: MoviePlayer) {
-    guard player.isSpriteVisible(spriteNumber) else { return }
 
     // Member resolution (including any Lingo puppet override) and the
     // geometry both come from the player, so rendering and hit-testing
