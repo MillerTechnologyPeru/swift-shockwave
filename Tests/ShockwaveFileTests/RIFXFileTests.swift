@@ -158,17 +158,20 @@ private func realMovieData() throws -> Data {
 
 @Test func realMovieBitmapPropertiesParse() throws {
   let file = try RIFXFile.read(from: realMovieData())
-  // legoparts member 12 "grab cursor": chunk map id known from CAS*.
+  // The internal cast's first member is the `main` movie script — no
+  // bitmap properties — while legoparts's first is a brick bitmap.
   let castList = try #require(try file.castList())
   let keyTable = try #require(try file.keyTable())
-  let legoparts = castList.entries[1]
-  let tableEntry = try #require(
-    keyTable.entries.first {
-      $0.fourCC == "CAS*" && $0.ownerChunkIndex == legoparts.resourceId
-    })
-  let table = try file.castTable(at: file.chunkMap[tableEntry.childChunkIndex])
-  let member = try file.castMember(at: file.chunkMap[table.memberIds[0]])
-  #expect(member.bitmapProperties == nil)  // "main" is a script
+  func firstMember(ofEntry index: Int) throws -> CastMemberChunk {
+    let tableEntry = try #require(
+      keyTable.entries.first {
+        $0.fourCC == "CAS*" && $0.ownerChunkIndex == castList.entries[index].resourceId
+      })
+    let table = try file.castTable(at: file.chunkMap[tableEntry.childChunkIndex])
+    return try file.castMember(at: file.chunkMap[table.memberIds[0]])
+  }
+  #expect(try firstMember(ofEntry: 0).bitmapProperties == nil)  // "main" is a script
+  #expect(try firstMember(ofEntry: 1).bitmapProperties != nil)  // BRICK_01_BLUE
 
   // First bitmap in the whole map: chunkMap[9], "brick_slickJump_dormant_1".
   let brick = try file.castMember(at: file.chunkMap[9])
@@ -345,24 +348,35 @@ private func realMovieData() throws -> Data {
   #expect(castList.entries.allSatisfy { $0.filePath.isEmpty })
   #expect(castList.entries.allSatisfy { $0.preloadMode == 0 })
 
+  // Every cast, the internal one included, carries a member range and the
+  // key-table owner id its `CAS*`/`Cinf`/`Lctx` chunks hang off. The ids
+  // run 1..14 with 8 skipped, so `libraryNumber` and file number diverge
+  // from cast 8 on.
   let internalCast = castList.entries[0]
-  #expect(internalCast.resourceId == nil)
+  #expect(internalCast.minMember == 1)
+  #expect(internalCast.maxMember == 44)
+  #expect(internalCast.resourceId == 0x10400)
 
   let legoparts = castList.entries[1]
   #expect(legoparts.minMember == 1)
-  #expect(legoparts.maxMember == 44)
-  #expect(legoparts.resourceId == 0x10400)
+  #expect(legoparts.maxMember == 36)
+  #expect(legoparts.resourceId == 0x20400)
+
+  let screens = castList.entries[10]
+  #expect(screens.name == "screens_by_peter")
+  #expect(screens.maxMember == 192)
+  #expect(screens.resourceId == 0xC0400)
 }
 
 @Test func realMovieCastTableJoinsThroughKeyTable() throws {
   let file = try RIFXFile.read(from: realMovieData())
   let castList = try #require(try file.castList())
   let keyTable = try #require(try file.keyTable())
-  let legoparts = castList.entries[1]
+  let internalCast = castList.entries[0]
 
   let tableEntry = try #require(
     keyTable.entries.first {
-      $0.fourCC == "CAS*" && $0.ownerChunkIndex == legoparts.resourceId
+      $0.fourCC == "CAS*" && $0.ownerChunkIndex == internalCast.resourceId
     })
   let table = try file.castTable(at: file.chunkMap[tableEntry.childChunkIndex])
   #expect(table.memberIds.count == 44)
@@ -403,10 +417,10 @@ private func realMovieData() throws -> Data {
     let member = try file.castMember(at: file.chunkMap[memberId])
     names.append(member.name ?? "")
   }
-  #expect(names.prefix(3) == ["main", "Display Text", "Tooltip"])
+  #expect(names.prefix(3) == ["BRICK_01_BLUE", "BRICK_02_BLUE", "BRICK_03_BLUE"])
   let digest = SHA256.hash(data: Data(names.joined(separator: "\n").utf8))
   let digestHex = digest.map { String(format: "%02x", $0) }.joined()
-  #expect(digestHex == "045f0a64127ba6ee7be077a4b44f55ed21e0188106cce68f6d9dbb0d9fa2c235")
+  #expect(digestHex == "29105ec8c45a9bea2d28c3ce7f45bec87fbd3686930496b7d7f160fe9da1be66")
 }
 
 @Test func realMovieFrameLabelsParse() throws {
@@ -471,4 +485,43 @@ private func realMovieData() throws -> Data {
   #expect(context.sectionMap.count == 2)
   #expect(context.sectionMap[0].sectionId == -1)
   #expect(context.sectionMap[1].sectionId == -2)
+}
+
+/// The `MCsL` item layout that mis-attached every cast library for a long
+/// time: 13 casts × 4 items = 52, but the chunk carries 53 — one leading
+/// item before the first cast — so a cast's metadata (member range + owner
+/// id) is item `i*4 + 4`, not `i*4`. Reading slot 0 picks up the NEXT
+/// cast's owner id, silently shifting every library one table over: the
+/// internal cast came out empty, `screens_by_peter`'s 192 members were
+/// credited to `backgrounds`, and every score reference into cast 11 —
+/// the entire menu/level/credits UI — failed to resolve. Verified against
+/// dirplayer-rs, which loads the same thirteen casts.
+@Test func castListMetadataIsAlignedToItsOwnCast() throws {
+  let file = try RIFXFile.read(from: realMovieData())
+  let castList = try #require(try file.castList())
+  let keyTable = try #require(try file.keyTable())
+
+  // Every entry carries an owner id, and wherever it owns a CAS* table the
+  // table's slot count matches the entry's own declared range — a shifted
+  // read pairs `screens_by_peter` (max 192) with a 58-slot table. An
+  // entry declared empty (`unused levels`, max 0) legitimately owns none.
+  var tablesChecked = 0
+  for entry in castList.entries {
+    let resourceId = try #require(entry.resourceId, "\(entry.name) should carry an owner id")
+    guard
+      let tableEntry = keyTable.entries.first(where: {
+        $0.fourCC == "CAS*" && $0.ownerChunkIndex == resourceId
+      })
+    else {
+      #expect(entry.maxMember == 0, "\(entry.name) has no CAS* table yet declares members")
+      continue
+    }
+    let table = try file.castTable(at: file.chunkMap[tableEntry.childChunkIndex])
+    let declaredSlots = (entry.maxMember ?? 0) - (entry.minMember ?? 1) + 1
+    #expect(
+      table.memberIds.count == declaredSlots,
+      "\(entry.name): table has \(table.memberIds.count) slots, range declares \(declaredSlots)")
+    tablesChecked += 1
+  }
+  #expect(tablesChecked == 12)
 }
