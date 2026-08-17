@@ -32,6 +32,13 @@ public final class MoviePlayer: LingoVMHost {
   /// color, for hit-testing; an empty array records a member that
   /// couldn't be decoded so it isn't retried.
   var hitMasks: [HitMaskKey: [Bool]] = [:]
+  /// Measures how tall a text member's content is at a given width, so an
+  /// auto-sizing text sprite (`boxType #adjust`) can grow past the height
+  /// the score recorded for it — the memo on the levels screen was
+  /// authored empty at 14px and filled in at runtime. Installed by the
+  /// rendering layer, which owns the text engine; without it text sprites
+  /// keep their score size.
+  public var textHeightMeasurer: ((CastMember, Int) -> Int)?
   /// Live behavior instances for the spans covering `currentFrame`, keyed
   /// by span index in `score.spans`.
   var activeSpans: [Int: [ScriptInstance]] = [:]
@@ -97,6 +104,10 @@ public final class MoviePlayer: LingoVMHost {
       }
       return nil
     }
+  }
+
+  public func castLibrary(_ id: LingoValue) -> LingoObject? {
+    resolveLibrary(id)
   }
 
   public func member(_ id: LingoValue, castLib: LingoValue?) -> LingoObject? {
