@@ -21,6 +21,7 @@ extension MoviePlayer {
   /// last frame.
   public func step() {
     guard isPlaying, currentFrame > 0 else { return }
+    dispatchMouseWithin()
     dispatchFrameEvent("exitFrame")
     let target = nextFrame ?? (currentFrame + 1)
     nextFrame = nil
@@ -66,11 +67,19 @@ extension MoviePlayer {
   /// Sends a discrete event (e.g. `mouseUp`) through Director's bubbling
   /// order: the target sprite's behaviors first, then the frame script's,
   /// then the movie scripts. Returns whether any handler received it.
+  ///
+  /// `bubbles: false` confines the event to the sprite — the pointer
+  /// events (`mouseEnter`/`mouseLeave`/`mouseWithin`) are the sprite's own
+  /// and never reach the frame or movie scripts.
   @discardableResult
-  public func dispatch(_ event: String, toSprite spriteNumber: Int? = nil) -> Bool {
+  public func dispatch(_ event: String, toSprite spriteNumber: Int? = nil, bubbles: Bool = true)
+    -> Bool
+  {
     if let spriteNumber {
       let handled = dispatchToSpans(event, channel: spriteNumber + 5)
-      if handled { return true }
+      if handled || !bubbles { return handled }
+    } else if !bubbles {
+      return false
     }
     if dispatchToSpans(event, channel: 0) { return true }
     if movieHandlerNames.contains(event.asciiLowercased()) {
