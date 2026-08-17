@@ -32,6 +32,10 @@ public final class MoviePlayer: LingoVMHost {
   /// color, for hit-testing; an empty array records a member that
   /// couldn't be decoded so it isn't retried.
   var hitMasks: [HitMaskKey: [Bool]] = [:]
+  /// How many frames each film loop sprite has played, by sprite number —
+  /// the loop's frame to show is this modulo its length. Advanced once
+  /// per movie frame; a loop plays continuously while its sprite is up.
+  var filmLoopFrames: [Int: Int] = [:]
   /// Measures how tall a text member's content is at a given width, so an
   /// auto-sizing text sprite (`boxType #adjust`) can grow past the height
   /// the score recorded for it — the memo on the levels screen was
