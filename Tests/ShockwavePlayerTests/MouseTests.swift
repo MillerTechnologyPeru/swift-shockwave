@@ -64,6 +64,9 @@ private func playerOnTheDemoLevel() throws -> MoviePlayer {
   let before = player.spriteRect(record, spriteNumber: 210)
   let x = before.left + before.width / 2
   let y = before.top + before.height / 2
+  // The title (sprite 2) covers the whole stage with a transparent ink;
+  // the pointer falls through its keyed pixels to the brick.
+  #expect(player.spriteAt(x: x, y: y) == 210)
 
   player.pressMouse(x: x, y: y)
   player.step()  // the frame that samples the press
