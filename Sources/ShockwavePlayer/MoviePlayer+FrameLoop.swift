@@ -198,6 +198,16 @@ extension MoviePlayer {
         handled = true
       }
     }
+    // Behaviors Lingo attached itself, through `scriptInstanceList` — the
+    // sample's playfield hangs a "part click behavior" on every brick
+    // sprite this way, and that is what makes the bricks draggable.
+    if channel >= 6, let sprite = existingSprite(channel - 5) {
+      for case let instance as ScriptInstance in sprite.scriptInstances
+      where instance.handler(named: event) != nil {
+        _ = instance.callMethod(event, args: [])
+        handled = true
+      }
+    }
     return handled
   }
 
