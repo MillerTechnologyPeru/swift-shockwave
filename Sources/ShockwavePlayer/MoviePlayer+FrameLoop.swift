@@ -21,6 +21,7 @@ extension MoviePlayer {
   /// last frame.
   public func step() {
     guard isPlaying, currentFrame > 0 else { return }
+    advanceFilmLoops()
     dispatchMouseWithin()
     dispatchFrameEvent("exitFrame")
     let target = nextFrame ?? (currentFrame + 1)
@@ -99,6 +100,19 @@ extension MoviePlayer {
     }
     stepActors()
     dispatchFrameEvent("enterFrame")
+  }
+
+  /// Moves every film loop on the current frame on by one of its own
+  /// frames. A loop's inner channels share their host's number as
+  /// `owner`, so hosts are counted once each.
+  private func advanceFilmLoops() {
+    var hosts = Set<Int>()
+    for entry in drawOrder(forFrame: currentFrame) where entry.spriteNumber != entry.owner {
+      hosts.insert(entry.owner)
+    }
+    for host in hosts {
+      filmLoopFrames[host, default: 0] += 1
+    }
   }
 
   /// Puts the playhead on `frame` and swaps the live sprite spans over:
