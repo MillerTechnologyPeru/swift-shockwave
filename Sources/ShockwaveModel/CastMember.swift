@@ -16,6 +16,10 @@ public enum ScriptMemberType: Int, Sendable {
 public final class CastMember: LingoObject {
   public let libraryNumber: Int
   public let memberNumber: Int
+  /// The index of this member's `CASt` chunk in the file's chunk map — the
+  /// owner id its media (`BITD`, `STXT`, `XMED`) hangs off in the key
+  /// table. `nil` for members not backed by the file.
+  public let chunkId: Int?
   public let chunk: CastMemberChunk
   public let scriptChunk: ScriptChunk?
   /// The name table of the cast's `Lnam` chunk — the one `scriptChunk`'s
@@ -37,6 +41,7 @@ public final class CastMember: LingoObject {
   public init(
     libraryNumber: Int,
     memberNumber: Int,
+    chunkId: Int? = nil,
     chunk: CastMemberChunk,
     scriptChunk: ScriptChunk?,
     scriptNames: [String] = [],
@@ -46,6 +51,7 @@ public final class CastMember: LingoObject {
   ) {
     self.libraryNumber = libraryNumber
     self.memberNumber = memberNumber
+    self.chunkId = chunkId
     self.chunk = chunk
     self.scriptChunk = scriptChunk
     self.scriptNames = scriptNames
