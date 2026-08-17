@@ -37,6 +37,9 @@ public final class CastMember: LingoObject {
   /// members without one. Scripts overwrite it through the `text` property;
   /// this keeps the movie's original.
   public let authoredText: String?
+  /// The typeface a text xtra member is set in (from its `XMED` styling),
+  /// or `nil` for members that carry none.
+  public let textStyle: XMediaText.Style?
 
   public init(
     libraryNumber: Int,
@@ -47,6 +50,7 @@ public final class CastMember: LingoObject {
     scriptNames: [String] = [],
     scriptUsesCapitalContext: Bool = false,
     authoredText: String? = nil,
+    textStyle: XMediaText.Style? = nil,
     environment: LingoEnvironment
   ) {
     self.libraryNumber = libraryNumber
@@ -57,6 +61,7 @@ public final class CastMember: LingoObject {
     self.scriptNames = scriptNames
     self.scriptUsesCapitalContext = scriptUsesCapitalContext
     self.authoredText = authoredText
+    self.textStyle = textStyle
     super.init(environment: environment)
   }
 
@@ -100,6 +105,12 @@ public final class CastMember: LingoObject {
       // content; a member with neither answers empty string, as Lingo does.
       if let value = dynamicProperties["text"] { return value }
       return .string(authoredText ?? "")
+    case "font":
+      if let value = dynamicProperties["font"] { return value }
+      return textStyle.map { .string($0.fontName) } ?? super.getProperty(name)
+    case "fontsize":
+      if let value = dynamicProperties["fontsize"] { return value }
+      return textStyle.map { .integer($0.fontSize) } ?? super.getProperty(name)
     // A bitmap's natural size and registration point — what
     // `s.width = s.member.width * scale` and `loc - member.regPoint` read.
     case "width":
