@@ -98,18 +98,20 @@ extension Movie {
       let chunk = try file.castMember(at: file.chunkMap[memberId])
       let scriptChunk = try loadScriptChunk(for: chunk, sectionMap: sectionMap, file: file)
       var authoredText: String?
+      var textStyle: XMediaText.Style?
       if let textId = textChunkIds[memberId] {
         authoredText = try? file.textChunk(at: file.chunkMap[textId]).text
       } else if let mediaId = mediaChunkIds[memberId],
         let data = try? file.chunkData(at: file.chunkMap[mediaId])
       {
         authoredText = XMediaText.text(from: data)
+        textStyle = XMediaText.style(from: data)
       }
       members[memberNumber] = CastMember(
         libraryNumber: libraryNumber, memberNumber: memberNumber, chunkId: memberId, chunk: chunk,
         scriptChunk: scriptChunk, scriptNames: scriptNames,
         scriptUsesCapitalContext: capitalContext, authoredText: authoredText,
-        environment: environment)
+        textStyle: textStyle, environment: environment)
     }
     return members
   }
