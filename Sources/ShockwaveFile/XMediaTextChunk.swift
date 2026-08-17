@@ -36,10 +36,19 @@ public enum XMediaText {
   public struct Style: Equatable, Sendable {
     public var fontName: String
     public var fontSize: Int
+    /// The first paragraph's fixed line pitch (`fixedLineSpace`), 0 when
+    /// the font's own leading applies.
+    public var fixedLineSpace: Int
+    /// The first paragraph's alignment: `left`, `center` or `right`.
+    public var alignment: String
 
-    public init(fontName: String, fontSize: Int) {
+    public init(
+      fontName: String, fontSize: Int, fixedLineSpace: Int = 0, alignment: String = "left"
+    ) {
       self.fontName = fontName
       self.fontSize = fontSize
+      self.fixedLineSpace = fixedLineSpace
+      self.alignment = alignment
     }
   }
 
@@ -127,7 +136,83 @@ public enum XMediaText {
     guard record.fontIndex >= 0, record.fontIndex < names.count, record.fontSize > 0,
       record.fontSize <= 200
     else { return nil }
-    return Style(fontName: names[record.fontIndex], fontSize: record.fontSize)
+    var style = Style(fontName: names[record.fontIndex], fontSize: record.fontSize)
+
+    // Paragraph formats (key 0x0007) are chosen by the first paragraph run
+    // (key 0x0005) the same way; they carry the fixed line pitch and the
+    // alignment the level menu's number column is set with.
+    if let table = sections.first(where: { $0.key == 0x0007 }) {
+      let paragraphs = paragraphRecords(in: table.body, version: version)
+      var index = 0
+      if let runs = sections.first(where: { $0.key == 0x0005 }) {
+        var packer = Packer(bytes: runs.body)
+        _ = packer.next()
+        let selected = packer.next()
+        if selected >= 0, selected < paragraphs.count { index = selected }
+      }
+      if index < paragraphs.count {
+        let paragraph = paragraphs[index]
+        if paragraph.lineSpacing > 0, paragraph.lineSpacing < 1000 {
+          style.fixedLineSpace = paragraph.lineSpacing
+        }
+        switch paragraph.justification {
+        case 1: style.alignment = "center"
+        case 2: style.alignment = "right"
+        default: break
+        }
+      }
+    }
+    return style
+  }
+
+  private struct ParagraphRecord {
+    var justification: Int
+    var lineSpacing: Int
+  }
+
+  /// Walks Paige's packed `par_info` records, keeping the justification and
+  /// line spacing; the rest is stepped over per Director's unpacker as
+  /// documented by dirplayer-rs.
+  private static func paragraphRecords(in bytes: ArraySlice<UInt8>, version: Int)
+    -> [ParagraphRecord]
+  {
+    var packer = Packer(bytes: bytes)
+    var records: [ParagraphRecord] = []
+    while packer.remaining > 4, records.count < 32 {
+      let start = packer.position
+      let justification = packer.next()
+      packer.skip(2)  // line height, box type
+      packer.skip(3)  // indents
+      packer.skip(2)  // border, margin
+      let lineSpacing = packer.next()
+      if version >= 65547 { packer.skip(1) }
+      packer.skip(8)
+      if version >= 65552 { packer.skip(1) }
+      packer.skipRefcon(version: version)
+      packer.skip(1 + 8)
+      let tabCount = packer.next()
+      if tabCount > 0 {
+        for _ in 0..<min(tabCount, 32) {
+          packer.skip(3)
+          packer.skipRefcon(version: version)
+        }
+        if tabCount > 32 { packer.skip(tabCount - 32) }
+      }
+      if version >= 8 { packer.skip(1) }
+      if version >= 65548 { packer.skip(1) }
+      if version >= 65552 { packer.skip(4) }
+      if version >= 65555 { packer.skip(1) }
+      if version >= 131075 { packer.skip(9) }
+      if version >= 131090 {
+        packer.skip(5)
+        if version >= 196614 { packer.skip(1) }
+        if version >= 196615 { packer.skip(1) }
+        if version >= 196616 { packer.skip(1) }
+      }
+      if packer.position == start { break }
+      records.append(ParagraphRecord(justification: justification, lineSpacing: lineSpacing))
+    }
+    return records
   }
 
   private struct StyleRecord {
