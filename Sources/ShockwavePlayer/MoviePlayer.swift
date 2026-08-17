@@ -43,6 +43,16 @@ public final class MoviePlayer: LingoVMHost {
   /// rendering layer, which owns the text engine; without it text sprites
   /// keep their score size.
   public var textHeightMeasurer: ((CastMember, Int) -> Int)?
+  /// Where a text member paints when drawn at a given size — one flag per
+  /// pixel, row-major — so pointer events fall through the unpainted part
+  /// of a background-transparent text sprite the way they do through a
+  /// keyed bitmap. The level list relies on it: its title column sits over
+  /// the shape whose behavior takes the click. Installed by the rendering
+  /// layer; without it text sprites take hits over their whole rect.
+  public var textCoverage: ((CastMember, Int, Int) -> [Bool]?)?
+  /// Cached `textCoverage` answers, keyed by member and the text, layout
+  /// and size they were computed for.
+  var textMasks: [Int: (text: String, layout: CastMember.TextLayout, size: (Int, Int), mask: [Bool])] = [:]
   /// Live behavior instances for the spans covering `currentFrame`, keyed
   /// by span index in `score.spans`.
   var activeSpans: [Int: [ScriptInstance]] = [:]
