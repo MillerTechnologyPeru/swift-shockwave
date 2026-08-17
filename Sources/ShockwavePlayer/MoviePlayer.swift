@@ -28,6 +28,10 @@ public final class MoviePlayer: LingoVMHost {
   /// The sprite the pointer was last found over, for `mouseEnter`/
   /// `mouseLeave`/`mouseWithin`; `nil` when over the bare stage.
   var hoveredSprite: Int?
+  /// Per-pixel coverage of bitmap members under a given ink and key
+  /// color, for hit-testing; an empty array records a member that
+  /// couldn't be decoded so it isn't retried.
+  var hitMasks: [HitMaskKey: [Bool]] = [:]
   /// Live behavior instances for the spans covering `currentFrame`, keyed
   /// by span index in `score.spans`.
   var activeSpans: [Int: [ScriptInstance]] = [:]
@@ -284,4 +288,12 @@ public final class MoviePlayer: LingoVMHost {
       return nil
     }
   }
+}
+
+/// Identifies one bitmap member's coverage under one ink/key combination.
+struct HitMaskKey: Hashable {
+  var library: Int
+  var member: Int
+  var ink: SpriteInk
+  var backColor: Int
 }
