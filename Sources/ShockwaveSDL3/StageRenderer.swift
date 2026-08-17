@@ -98,9 +98,13 @@ final class StageRenderer {
     // The sprite's foreColor is a palette index; junkbot is a Windows-built
     // movie, so System-Win is the palette its authored indices assume.
     let color = BuiltinPalette.systemWin[record.foreColor & 0xFF]
+    // The member's own face and size, when its styling says; a field
+    // without any is drawn at Director's default 12.
+    let style = member.textStyle
     guard
       let rgba = TextRasterizer.rgba(
-        text: text, width: rect.width, height: rect.height, color: color, fontSize: 12),
+        text: text, width: rect.width, height: rect.height, color: color,
+        fontName: style?.fontName, fontSize: Double(style?.fontSize ?? 12)),
       let texture = try? SDLTexture(
         renderer: renderer, format: .init(rawValue: SDL_PIXELFORMAT_RGBA32.rawValue), access: .static,
         width: rect.width, height: rect.height)
