@@ -14,9 +14,9 @@ private func realMovie() throws -> Movie {
 /// member's `CASt`, joined at load time like bitmaps join their `BITD`.
 @Test func fieldMembersLoadTheirAuthoredText() throws {
   let movie = try realMovie()
-  // `config field` in `legoparts` holds the game's master playfield
+  // `config field` in the internal cast holds the game's master playfield
   // configuration — the text `legoparts manager` parses at startup.
-  let library = try #require(movie.castManager.library(number: 2))
+  let library = try #require(movie.castManager.library(number: 1))
   let config = try #require(library.member(29))
   #expect(config.name == "config field")
   let text = try #require(config.authoredText)
@@ -32,7 +32,7 @@ private func realMovie() throws -> Movie {
 /// it; the override then wins without losing the original.
 @Test func textPropertyPrefersScriptOverrides() throws {
   let movie = try realMovie()
-  let member = try #require(movie.castManager.library(number: 2)?.member(29))
+  let member = try #require(movie.castManager.library(number: 1)?.member(29))
   #expect(member.getProperty("text").asString().hasPrefix("[playfield]"))
 
   member.setProperty("text", value: .string("READY TO PLAY"))
