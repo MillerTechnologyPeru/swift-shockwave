@@ -15,8 +15,10 @@ extension MoviePlayer {
   /// Runs one frame cycle: dispatches `exitFrame`, then moves the playhead
   /// to wherever `go(...)` pointed it (or the next frame), dispatching
   /// `endSprite`/`beginSprite` for spans that close/open along the way and
-  /// `prepareFrame`/`enterFrame` on arrival. Playback stops past the last
-  /// frame.
+  /// `prepareFrame`/`enterFrame` on arrival. A `go` has already swapped the
+  /// spans by the time this runs (see `movePlayhead(to:)`), so arriving on
+  /// its target only dispatches the frame events. Playback stops past the
+  /// last frame.
   public func step() {
     guard isPlaying, currentFrame > 0 else { return }
     dispatchFrameEvent("exitFrame")
@@ -31,11 +33,24 @@ extension MoviePlayer {
 
   /// Moves the playhead immediately without dispatching `exitFrame` on the
   /// current frame — the between-frames jump tests use to position the
-  /// movie. Regular Lingo `go(...)` instead takes effect at the next
-  /// `step()`.
+  /// movie.
   public func jump(to frame: Int) {
     guard isPlaying else { return }
     enterFrame(frame, isFirst: false)
+  }
+
+  /// Lingo `go`: the playhead moves now — the destination frame's spans
+  /// open (and the old ones close) before the calling handler continues,
+  /// as in Director — and the next `step()` lands on that frame instead of
+  /// advancing. A `go` to the frame already showing just pins the playhead
+  /// there, the idiom behind `go the frame`. Out-of-range targets are
+  /// ignored, as Director ignores unknown labels.
+  func go(to frame: Int) {
+    guard let score = movieModel.score, frame >= 1, frame <= score.frameCount else { return }
+    nextFrame = frame
+    if isPlaying, frame != currentFrame {
+      movePlayhead(to: frame)
+    }
   }
 
   /// Dispatches `stopMovie` and tears down live behavior instances.
@@ -67,7 +82,28 @@ extension MoviePlayer {
 
   // MARK: - Frame transitions
 
-  private func enterFrame(_ frame: Int, isFirst: Bool, redirects: Int = 0) {
+  private func enterFrame(_ frame: Int, isFirst: Bool) {
+    movePlayhead(to: frame)
+    dispatchFrameEvent("prepareFrame")
+    if isFirst {
+      callHandler("startMovie")
+    }
+    stepActors()
+    dispatchFrameEvent("enterFrame")
+  }
+
+  /// Puts the playhead on `frame` and swaps the live sprite spans over:
+  /// spans that end are closed (`endSprite`), spans that start are opened
+  /// (`beginSprite`), spans that continue are left alone. Idempotent — a
+  /// second call for the frame the playhead is already on changes nothing.
+  ///
+  /// This is the part of a frame change Director performs *inside* `go`,
+  /// before the calling handler continues, and movies lean on that order.
+  /// The sample's download manager does `go("loading")` and then sets the
+  /// bricks that live only on that frame visible — over the top of a
+  /// behavior on those very sprites whose `beginSprite` hides them. Run
+  /// `beginSprite` any later and the bricks vanish for good.
+  func movePlayhead(to frame: Int) {
     let previous = Set(activeSpanIndices())
     currentFrame = frame
     movieModel.setProperty("frame", value: .integer(frame))
@@ -79,31 +115,7 @@ extension MoviePlayer {
     for index in current.subtracting(previous).sorted() {
       openSpan(index)
     }
-
-    dispatchFrameEvent("prepareFrame")
-    if isFirst {
-      callHandler("startMovie")
-    }
-    stepActors()
-    // An actor that calls `go` is redirecting the playhead now, not at the
-    // end of this frame: a looping frame script (`go to the frame` on
-    // exitFrame) would otherwise overwrite the actor's target before it
-    // ever took effect, which is exactly how the sample's loading sequence
-    // steers itself off its first frame. The hop count stops an actor that
-    // redirects unconditionally from recursing without end.
-    if let target = nextFrame, target != frame, isPlaying, redirects < Self.maxFrameRedirects,
-      let score = movieModel.score, target >= 1, target <= score.frameCount
-    {
-      nextFrame = nil
-      enterFrame(target, isFirst: false, redirects: redirects + 1)
-      return
-    }
-    dispatchFrameEvent("enterFrame")
   }
-
-  /// How many times one frame's actors may redirect the playhead before the
-  /// player stops following them and just runs the frame it landed on.
-  private static let maxFrameRedirects = 16
 
   /// Sends `stepFrame` to everything on `the actorList`, between
   /// `prepareFrame` and `enterFrame`.
@@ -136,6 +148,15 @@ extension MoviePlayer {
       else { continue }
       let instance = ScriptInstance(member: member, player: self)
       instance.setProperty("spriteNum", value: .integer(span.spriteNumber ?? 0))
+      // The parameters authored into the score for this attachment — the
+      // `[#mylocz: 5]` a "set my locZ" behavior reads in `beginSprite`.
+      if let initializer = reference.initializer,
+        case .propertyListType(let parameters) = LingoBuiltins.value(.string(initializer))
+      {
+        for (key, value) in parameters.elements {
+          instance.setProperty(key.asString(), value: value)
+        }
+      }
       instances.append(instance)
     }
     activeSpans[index] = instances
