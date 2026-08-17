@@ -122,6 +122,16 @@ extension MoviePlayer {
       // Stretching scales the registration offset along with the artwork.
       regX = natural.width > 0 ? properties.regX * width / natural.width : properties.regX
       regY = natural.height > 0 ? properties.regY * height / natural.height : properties.regY
+    } else if let properties = effectiveMember(record, spriteNumber: spriteNumber)?
+      .chunk.filmLoopProperties
+    {
+      // A film loop registers at the center of its bounds.
+      if !record.stretch {
+        width = properties.bounds.width
+        height = properties.bounds.height
+      }
+      regX = width / 2
+      regY = height / 2
     }
 
     if !record.stretch, let measure = textHeightMeasurer,
@@ -141,6 +151,17 @@ extension MoviePlayer {
     return SpriteRect(left: locH - regX, top: locV - regY, width: width, height: height)
   }
 
+  /// One thing to draw: a sprite channel's record, or one frame-channel of
+  /// a film loop playing on a sprite. `owner` is the stage sprite it
+  /// belongs to (itself, for an ordinary sprite; the hosting sprite, for a
+  /// film loop's inner channel, whose `spriteNumber` is then a synthetic
+  /// negative id with no puppet state of its own).
+  public struct DrawEntry {
+    public var spriteNumber: Int
+    public var owner: Int
+    public var record: SpriteChannelRecord
+  }
+
   /// The populated sprite channels of a frame, back to front: the order
   /// they draw in, and the reverse of the order they take a hit in.
   ///
@@ -153,8 +174,9 @@ extension MoviePlayer {
   /// Channels the score populates on the frame are joined by any sprite
   /// Lingo has puppeted a member onto (`effectiveRecord(forSprite:)`), so a
   /// level built entirely from pool sprites draws too. Only the current
-  /// frame carries puppet state.
-  public func drawOrder(forFrame frameNumber: Int) -> [(spriteNumber: Int, record: SpriteChannelRecord)] {
+  /// frame carries puppet state. A sprite showing a film loop is replaced
+  /// by that loop's current frame, laid over the sprite's rect.
+  public func drawOrder(forFrame frameNumber: Int) -> [DrawEntry] {
     guard let score = movieModel.score, frameNumber >= 1,
       frameNumber <= score.chunk.frames.count
     else { return [] }
@@ -163,7 +185,7 @@ extension MoviePlayer {
     if frameNumber == currentFrame {
       numbers.formUnion(puppetedSpriteNumbers())
     }
-    var entries: [(spriteNumber: Int, record: SpriteChannelRecord, z: Int)] = []
+    var entries: [(entry: DrawEntry, z: Int, order: Int)] = []
     for spriteNumber in numbers {
       let record: SpriteChannelRecord?
       if frameNumber == currentFrame {
@@ -173,11 +195,51 @@ extension MoviePlayer {
       }
       guard let record else { continue }
       let z = existingSprite(spriteNumber)?.puppeted("locZ")?.asInteger() ?? spriteNumber
-      entries.append((spriteNumber, record, z))
+      let inner = filmLoopEntries(record: record, spriteNumber: spriteNumber)
+      if inner.isEmpty {
+        entries.append((DrawEntry(spriteNumber: spriteNumber, owner: spriteNumber, record: record), z, 0))
+      } else {
+        for (index, entry) in inner.enumerated() {
+          entries.append((entry, z, index + 1))
+        }
+      }
     }
     return entries
-      .sorted { ($0.z, $0.spriteNumber) < ($1.z, $1.spriteNumber) }
-      .map { ($0.spriteNumber, $0.record) }
+      .sorted { ($0.z, $0.entry.owner, $0.order) < ($1.z, $1.entry.owner, $1.order) }
+      .map(\.entry)
+  }
+
+  /// The channels of the frame a film loop sprite is currently showing,
+  /// translated onto the stage — empty for anything that isn't a film
+  /// loop with frames. Inner records name members in the loop's own cast
+  /// as `castLib 65535`; positions are relative to the loop's bounds,
+  /// which sit centered on the sprite's loc (and scale with a stretched
+  /// sprite). One level only: a loop inside a loop draws as nothing.
+  private func filmLoopEntries(record: SpriteChannelRecord, spriteNumber: Int) -> [DrawEntry] {
+    guard spriteNumber >= 0, let member = effectiveMember(record, spriteNumber: spriteNumber),
+      let loop = member.filmLoopScore, !loop.frames.isEmpty,
+      let properties = member.chunk.filmLoopProperties, properties.bounds.width > 0,
+      properties.bounds.height > 0
+    else { return [] }
+    let host = spriteRect(record, spriteNumber: spriteNumber)
+    let frameIndex = filmLoopFrames[spriteNumber, default: 0] % loop.frames.count
+    let frame = loop.frames[frameIndex]
+    let bounds = properties.bounds
+    var entries: [DrawEntry] = []
+    for channel in frame.channels.keys.sorted() where channel >= 6 {
+      guard var inner = frame.spriteRecord(channel: channel) else { continue }
+      if inner.castLib == 65535 { inner.castLib = member.libraryNumber }
+      inner.left = host.left + (inner.left - bounds.left) * host.width / bounds.width
+      inner.top = host.top + (inner.top - bounds.top) * host.height / bounds.height
+      if record.stretch {
+        inner.width = inner.width * host.width / bounds.width
+        inner.height = inner.height * host.height / bounds.height
+        inner.stretch = true
+      }
+      entries.append(
+        DrawEntry(spriteNumber: -(spriteNumber * 1024 + channel), owner: spriteNumber, record: inner))
+    }
+    return entries
   }
 
   /// The topmost sprite (Lingo sprite number) under `(x, y)` at the
@@ -190,12 +252,11 @@ extension MoviePlayer {
   /// full-stage, background-transparent title. Copy-ink bitmaps and every
   /// other member type are tested by rect. Rotation/skew aren't modeled.
   public func spriteAt(x: Int, y: Int) -> Int? {
-    for (spriteNumber, record) in drawOrder(forFrame: currentFrame).reversed()
-    where isSpriteVisible(spriteNumber) {
-      let rect = spriteRect(record, spriteNumber: spriteNumber)
+    for entry in drawOrder(forFrame: currentFrame).reversed() where isSpriteVisible(entry.owner) {
+      let rect = spriteRect(entry.record, spriteNumber: entry.spriteNumber)
       guard rect.contains(x: x, y: y) else { continue }
-      if paints(record, spriteNumber: spriteNumber, rect: rect, x: x, y: y) {
-        return spriteNumber
+      if paints(entry.record, spriteNumber: entry.spriteNumber, rect: rect, x: x, y: y) {
+        return entry.owner
       }
     }
     return nil
