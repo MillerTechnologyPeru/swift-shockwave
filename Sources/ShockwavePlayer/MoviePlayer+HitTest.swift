@@ -28,7 +28,7 @@ extension MoviePlayer {
     {
       return castMember
     }
-    return movieModel.castManager.library(fileNumber: record.castLib)?.member(record.member)
+    return movieModel.castManager.library(scoreCastLib: record.castLib)?.member(record.member)
   }
 
   /// The score record covering a sprite channel on the current frame, or
