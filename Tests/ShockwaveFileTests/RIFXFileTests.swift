@@ -182,7 +182,9 @@ private func realMovieData() throws -> Data {
   #expect(properties.regX == 0)
   #expect(properties.bitsPerPixel == 8)
   #expect(properties.paletteCastLib == -1)
-  #expect(properties.paletteMember == -7)
+  // Stored -7, which is Web 216 (-8) in Lingo's numbering — the file
+  // keeps built-in ids one higher than Lingo does.
+  #expect(properties.paletteMember == -8)
   #expect(properties.decodedByteCount == 1218)
 }
 
