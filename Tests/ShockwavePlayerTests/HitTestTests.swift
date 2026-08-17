@@ -52,10 +52,12 @@ private func realPlayer() throws -> MoviePlayer {
   // at (600, 100) over sprite 1 (channel 6) underneath it. Puppeting
   // sprite 2 away uncovers sprite 1 at that spot, and sprite 2 itself
   // becomes hittable at its new puppeted location instead.
+  // (The movie itself parks hidden sprites at point(1000, 1000), so pick
+  // a spot nothing else uses.)
   let sprite2 = try #require(player.sprite(.integer(2)))
-  sprite2.setProperty("locH", value: .integer(1000))
-  sprite2.setProperty("locV", value: .integer(1000))
+  sprite2.setProperty("locH", value: .integer(3000))
+  sprite2.setProperty("locV", value: .integer(3000))
 
   #expect(player.spriteAt(x: 600, y: 100) == 1)
-  #expect(player.spriteAt(x: 1000, y: 1000) == 2)
+  #expect(player.spriteAt(x: 3000, y: 3000) == 2)
 }
