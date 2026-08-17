@@ -27,13 +27,21 @@ public struct ScoreChunk: Sendable {
   /// A behavior attachment: `(castLib, member)` of a script cast member.
   /// `castLib` uses the file-internal library numbering
   /// (`CastListEntry.resourceId >> 16`).
+  ///
+  /// `initializer` is the parameter list the author filled in through the
+  /// behavior's `getPropertyDescriptionList` dialog, stored as the source
+  /// text of a Lingo property list (`[#mylocz: 5]`), or `nil` when the
+  /// behavior takes no parameters. Applied to the instance's properties
+  /// before `beginSprite`.
   public struct BehaviorReference: Equatable, Sendable {
     public var castLib: Int
     public var member: Int
+    public var initializer: String?
 
-    public init(castLib: Int, member: Int) {
+    public init(castLib: Int, member: Int, initializer: String? = nil) {
       self.castLib = castLib
       self.member = member
+      self.initializer = initializer
     }
   }
 
@@ -125,9 +133,19 @@ public struct ScoreChunk: Sendable {
         var behaviors: [BehaviorReference] = []
         behaviors.reserveCapacity(secondary.count / 8)
         for j in stride(from: 0, to: secondary.count - 7, by: 8) {
+          // Each record is castLib, member, then the entry index of the
+          // parameter list (0 when there is none).
+          let initializerEntry = Int(readU32(secondary, j + 4))
+          var initializer: String?
+          if initializerEntry > 0, initializerEntry < entryCount {
+            let raw = try entry(initializerEntry)
+            let text = String(decoding: raw.prefix(while: { $0 != 0 }), as: UTF8.self)
+            if text.hasPrefix("[") { initializer = text }
+          }
           behaviors.append(
             BehaviorReference(
-              castLib: Int(readU16(secondary, j)), member: Int(readU16(secondary, j + 2))))
+              castLib: Int(readU16(secondary, j)), member: Int(readU16(secondary, j + 2)),
+              initializer: initializer))
         }
         intervals.append(
           BehaviorInterval(
