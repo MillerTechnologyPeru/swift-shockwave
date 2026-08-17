@@ -60,6 +60,8 @@ final class StageRenderer {
   private struct TextEntry {
     var text: String
     var colorIndex: Int
+    var layout: CastMember.TextLayout
+    var size: (Int, Int)
     var texture: SDLTexture?
   }
   private var textTextures: [Int: TextEntry] = [:]
@@ -67,17 +69,15 @@ final class StageRenderer {
   private func textTexture(
     for member: CastMember, record: SpriteChannelRecord, rect: SpriteRect
   ) -> SDLTexture? {
-    switch member.chunk.type {
-    case .field, .button, .richText, .xtra: break
-    default: return nil
-    }
-    guard let text = member.text, !text.isEmpty, rect.width > 0, rect.height > 0 else {
-      return nil
-    }
+    guard member.isTextMember, let text = member.text, !text.isEmpty, rect.width > 0,
+      rect.height > 0
+    else { return nil }
 
+    let layout = member.textLayout
     let key = (member.libraryNumber << 16) | member.memberNumber
     if let cached = textTextures[key], cached.text == text,
-      cached.colorIndex == record.foreColor
+      cached.colorIndex == record.foreColor, cached.layout == layout,
+      cached.size == (rect.width, rect.height)
     {
       return cached.texture
     }
@@ -88,26 +88,35 @@ final class StageRenderer {
     // The sprite's foreColor is a palette index; junkbot is a Windows-built
     // movie, so System-Win is the palette its authored indices assume.
     let color = BuiltinPalette.systemWin[record.foreColor & 0xFF]
-    // The member's own face and size, when its styling says; a field
-    // without any is drawn at Director's default 12.
-    let style = member.textStyle
+    var entry = TextEntry(
+      text: text, colorIndex: record.foreColor, layout: layout, size: (rect.width, rect.height),
+      texture: nil)
+    defer { textTextures[key] = entry }
     guard
       let rgba = TextRasterizer.rgba(
         text: text, width: rect.width, height: rect.height, color: color,
-        fontName: style?.fontName, fontSize: Double(style?.fontSize ?? 12)),
+        fontName: layout.fontName, fontSize: Double(layout.fontSize),
+        fixedLineSpace: layout.fixedLineSpace, alignment: layout.alignment),
       let texture = try? SDLTexture(
         renderer: renderer, format: .init(rawValue: SDL_PIXELFORMAT_RGBA32.rawValue), access: .static,
         width: rect.width, height: rect.height)
-    else {
-      textTextures[key] = TextEntry(text: text, colorIndex: record.foreColor, texture: nil)
-      return nil
-    }
+    else { return nil }
     rgba.withUnsafeBytes { buffer in
       try? texture.update(pixels: UnsafeMutableRawPointer(mutating: buffer.baseAddress!), pitch: rect.width * 4)
     }
     try? texture.setBlendMode([.alpha])
-    textTextures[key] = TextEntry(text: text, colorIndex: record.foreColor, texture: texture)
+    entry.texture = texture
     return texture
+  }
+
+  /// The height a text member's content needs at `width`, for the player's
+  /// auto-sizing text sprites.
+  static func textHeight(of member: CastMember, width: Int) -> Int {
+    guard member.isTextMember, let text = member.text, !text.isEmpty else { return 0 }
+    let layout = member.textLayout
+    return TextRasterizer.height(
+      text: text, width: width, fontName: layout.fontName, fontSize: Double(layout.fontSize),
+      fixedLineSpace: layout.fixedLineSpace)
   }
 
   private func texture(
