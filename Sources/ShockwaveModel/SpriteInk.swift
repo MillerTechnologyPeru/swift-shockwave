@@ -1,10 +1,10 @@
 import ShockwaveFile
 
-/// The compositing modes the renderer distinguishes for a sprite channel's
+/// The compositing modes the renderer (and pixel hit-testing) distinguish for a sprite channel's
 /// ink value. Director defines many more inks (reverse, blend, darken...);
 /// the ones the renderer doesn't implement yet map onto the closest of
 /// these three so sprites still show up sensibly.
-enum SpriteInk: Equatable {
+public enum SpriteInk: Equatable, Sendable {
   /// Ink 0: every pixel composites opaque.
   case copy
   /// Ink 36 ("background transparent"): pixels matching the sprite's
@@ -26,7 +26,7 @@ enum SpriteInk: Equatable {
   /// Maps a score record's raw ink number onto a renderer mode. Unhandled
   /// inks fall back to `backgroundTransparent`, which was the renderer's
   /// previous behavior for every nonzero ink.
-  init(inkNumber: Int) {
+  public init(inkNumber: Int) {
     switch inkNumber {
     case 0: self = .copy
     case 3: self = .ghost
@@ -36,7 +36,7 @@ enum SpriteInk: Equatable {
   }
 
   /// Stable 2-bit value for texture cache keys.
-  var cacheBits: Int {
+  public var cacheBits: Int {
     switch self {
     case .copy: return 0
     case .backgroundTransparent: return 1
