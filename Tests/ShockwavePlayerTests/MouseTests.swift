@@ -96,3 +96,28 @@ private func playerOnTheDemoLevel() throws -> MoviePlayer {
   #expect(player.sprite(.integer(210))?.getProperty("blend").asInteger() == 25)
   #expect(!player.transcript.contains { $0.hasPrefix("script error") })
 }
+
+/// Pointer events fall through the unpainted part of a background-
+/// transparent text sprite when the renderer supplies text coverage: the
+/// level list's title column sits over the shape whose `ListRoHiLite`
+/// takes the click, and only glyph pixels of the titles get in the way.
+@MainActor
+@Test func textSpritesTakeHitsOnlyWhereTheyPaint() throws {
+  let file = try RIFXFile.read(from: Data(contentsOf: TestResources.junkbotMovieURL))
+  let movie = try Movie.load(from: file)
+  let player = MoviePlayer(movie: movie)
+  // A stand-in text engine: the left half of every text box "paints".
+  player.textCoverage = { _, width, height in
+    (0..<(width * height)).map { $0 % width < width / 2 }
+  }
+  player.start()
+  // "levels": sprite 5 (level.num, ink 36, authored "1"…"15") over sprite 4
+  // (the list shape);
+  // the opening memo (sprites 71–74) is hidden out of the way.
+  player.jump(to: 18)
+  for number in 71...74 { player.sprite(.integer(number))?.setProperty("visible", value: .integer(0)) }
+  #expect(player.spriteAt(x: 20, y: 380) == 5)  // painted half of the number column
+  #expect(player.spriteAt(x: 42, y: 380) == 4)  // unpainted half falls through
+  player.textCoverage = nil
+  #expect(player.spriteAt(x: 42, y: 380) == 5)  // no engine: the whole rect takes it
+}
