@@ -110,13 +110,20 @@ public final class MoviePlayer: LingoVMHost {
     sprites[number]
   }
 
-  /// Every sprite number the running Lingo has puppeted a member onto.
+  /// Every sprite number the running Lingo has puppeted a member onto and
+  /// hasn't hidden. The sample's playfield cycles its whole 800-sprite
+  /// pool as pieces are erased and re-placed each frame, so most of the
+  /// pool ends up touched but parked out of sight; leaving those out here
+  /// keeps the draw order to what actually shows.
   func puppetedSpriteNumbers() -> [Int] {
     sprites.compactMap { number, sprite in
-      if case .object(let object)? = sprite.puppeted("member"), object is CastMember {
-        return number
+      guard case .object(let object)? = sprite.puppeted("member"), object is CastMember else {
+        return nil
       }
-      return nil
+      if let visible = sprite.puppeted("visible") {
+        if case .void = visible {} else if !visible.asBool() { return nil }
+      }
+      return number
     }
   }
 
