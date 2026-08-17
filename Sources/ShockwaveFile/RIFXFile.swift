@@ -150,7 +150,13 @@ extension RIFXFile {
 
   public func score() throws -> ScoreChunk? {
     guard let entry = entries(fourCC: "VWSC").first else { return nil }
-    return try withPayloadSpan(of: entry) { payload in
+    return try score(at: entry)
+  }
+
+  /// A specific score chunk — the movie's own, or the one a film loop
+  /// member owns through the key table.
+  public func score(at entry: ChunkMapEntry) throws -> ScoreChunk {
+    try withPayloadSpan(of: entry) { payload in
       try ScoreChunk(parsing: &payload)
     }
   }
