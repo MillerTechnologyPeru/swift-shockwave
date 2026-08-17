@@ -32,12 +32,8 @@ final class StageRenderer {
   }
 
   func renderFrame(_ frameNumber: Int, player: MoviePlayer) {
-    guard let score = movie.score, frameNumber >= 1, frameNumber <= score.chunk.frames.count
-    else { return }
-    let frame = score.chunk.frames[frameNumber - 1]
-    for channel in frame.channels.keys.sorted() where channel >= 6 {
-      guard let record = frame.spriteRecord(channel: channel) else { continue }
-      drawSprite(record, spriteNumber: channel - 5, player: player)
+    for (spriteNumber, record) in player.drawOrder(forFrame: frameNumber) {
+      drawSprite(record, spriteNumber: spriteNumber, player: player)
     }
   }
 
