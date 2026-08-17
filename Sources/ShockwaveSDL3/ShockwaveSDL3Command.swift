@@ -59,6 +59,9 @@ struct ShockwaveSDL3Command: AsyncParsableCommand {
 
     let stageRenderer = StageRenderer(movie: movie, renderer: renderer)
     player.textHeightMeasurer = { member, width in StageRenderer.textHeight(of: member, width: width) }
+    player.textCoverage = { member, width, height in
+      StageRenderer.textCoverage(of: member, width: width, height: height)
+    }
 
     player.start()
 
