@@ -262,6 +262,27 @@ extension MoviePlayer {
     return nil
   }
 
+  /// Whether a transparent-ink text sprite paints at `(x, y)`: only its
+  /// glyph pixels take the hit. Without a coverage provider the whole rect
+  /// does.
+  private func textPaints(_ member: CastMember, rect: SpriteRect, x: Int, y: Int) -> Bool {
+    guard let textCoverage, let text = member.text, !text.isEmpty else { return true }
+    let key = (member.libraryNumber << 16) | member.memberNumber
+    let layout = member.textLayout
+    let mask: [Bool]
+    if let cached = textMasks[key], cached.text == text, cached.layout == layout,
+      cached.size == (rect.width, rect.height)
+    {
+      mask = cached.mask
+    } else {
+      guard let computed = textCoverage(member, rect.width, rect.height) else { return true }
+      mask = computed
+      textMasks[key] = (text, layout, (rect.width, rect.height), computed)
+    }
+    guard mask.count == rect.width * rect.height else { return true }
+    return mask[(y - rect.top) * rect.width + (x - rect.left)]
+  }
+
   /// Whether the sprite puts a pixel at stage point `(x, y)`, known to be
   /// inside `rect`. Anything without decodable bitmap coverage under a
   /// transparent ink counts as painting its whole rect.
@@ -269,9 +290,13 @@ extension MoviePlayer {
     _ record: SpriteChannelRecord, spriteNumber: Int, rect: SpriteRect, x: Int, y: Int
   ) -> Bool {
     let ink = SpriteInk(inkNumber: record.ink)
-    guard ink != .copy, let member = effectiveMember(record, spriteNumber: spriteNumber),
-      let properties = member.chunk.bitmapProperties
-    else { return true }
+    guard ink != .copy, let member = effectiveMember(record, spriteNumber: spriteNumber) else {
+      return true
+    }
+    if member.isTextMember {
+      return textPaints(member, rect: rect, x: x, y: y)
+    }
+    guard let properties = member.chunk.bitmapProperties else { return true }
     let width = properties.bounds.width
     let height = properties.bounds.height
     guard width > 0, height > 0, rect.width > 0, rect.height > 0 else { return true }
