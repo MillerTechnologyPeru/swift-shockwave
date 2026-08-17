@@ -2,7 +2,7 @@ import Foundation
 import ShockwaveFile
 import Testing
 
-@testable import ShockwaveSDL3
+import ShockwaveModel
 
 /// 8-bit test palette: index 0 white, index 1 black, index 2 red.
 private let testPalette: [PaletteChunk.Color] = [
