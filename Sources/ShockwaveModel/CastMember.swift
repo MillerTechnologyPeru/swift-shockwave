@@ -72,6 +72,36 @@ public final class CastMember: LingoObject {
     super.init(environment: environment)
   }
 
+  /// How a text member lays out: what the movie authored, overridden by
+  /// whatever the running Lingo has set on it (`member("x").fixedLineSpace
+  /// = 21`, `.alignment = #right`, `.font`, `.fontSize`).
+  public struct TextLayout: Equatable, Sendable {
+    public var fontName: String?
+    public var fontSize: Int
+    /// A fixed line pitch in pixels, or 0 for the font's natural leading.
+    public var fixedLineSpace: Int
+    /// `left`, `center` or `right`.
+    public var alignment: String
+  }
+
+  /// Whether the member shows text (field, text xtra, rich text, button).
+  public var isTextMember: Bool {
+    switch chunk.type {
+    case .field, .button, .richText, .xtra: return true
+    default: return false
+    }
+  }
+
+  public var textLayout: TextLayout {
+    let fontName = dynamicProperties["font"]?.asString() ?? textStyle?.fontName
+    let fontSize = dynamicProperties["fontsize"]?.asInteger() ?? textStyle?.fontSize ?? 12
+    let spacing = dynamicProperties["fixedlinespace"]?.asInteger() ?? textStyle?.fixedLineSpace ?? 0
+    let alignment =
+      dynamicProperties["alignment"]?.asString().lowercased() ?? textStyle?.alignment ?? "left"
+    return TextLayout(
+      fontName: fontName, fontSize: fontSize, fixedLineSpace: spacing, alignment: alignment)
+  }
+
   /// The member's bitmap composited under `ink` with `backColor` as the
   /// key, as RGBA at the member's natural size — what the renderer
   /// uploads and what hit-testing reads coverage from. `nil` for anything
