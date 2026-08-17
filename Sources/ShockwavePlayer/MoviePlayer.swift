@@ -75,6 +75,23 @@ public final class MoviePlayer: LingoVMHost {
     return sprite
   }
 
+  /// The sprite object for a channel if Lingo has ever asked for it —
+  /// unlike `sprite(_:)`, this never creates one, so it can be used to ask
+  /// "has anything been puppeted here?" without answering yes by asking.
+  func existingSprite(_ number: Int) -> Sprite? {
+    sprites[number]
+  }
+
+  /// Every sprite number the running Lingo has puppeted a member onto.
+  func puppetedSpriteNumbers() -> [Int] {
+    sprites.compactMap { number, sprite in
+      if case .object(let object)? = sprite.puppeted("member"), object is CastMember {
+        return number
+      }
+      return nil
+    }
+  }
+
   public func member(_ id: LingoValue, castLib: LingoValue?) -> LingoObject? {
     let library = castLib.flatMap(resolveLibrary)
     switch id {
