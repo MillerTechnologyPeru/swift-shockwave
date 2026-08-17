@@ -1,3 +1,4 @@
+import Foundation
 import LingoBytecode
 import LingoRuntime
 import ShockwaveFile
@@ -40,6 +41,10 @@ public final class CastMember: LingoObject {
   /// The typeface a text xtra member is set in (from its `XMED` styling),
   /// or `nil` for members that carry none.
   public let textStyle: XMediaText.Style?
+  /// A bitmap member's raw `BITD` payload (compressed or not), or `nil`
+  /// for members that have none. Decoded on demand by whoever draws or
+  /// hit-tests it.
+  public let bitmapData: Data?
 
   public init(
     libraryNumber: Int,
@@ -51,6 +56,7 @@ public final class CastMember: LingoObject {
     scriptUsesCapitalContext: Bool = false,
     authoredText: String? = nil,
     textStyle: XMediaText.Style? = nil,
+    bitmapData: Data? = nil,
     environment: LingoEnvironment
   ) {
     self.libraryNumber = libraryNumber
@@ -62,7 +68,22 @@ public final class CastMember: LingoObject {
     self.scriptUsesCapitalContext = scriptUsesCapitalContext
     self.authoredText = authoredText
     self.textStyle = textStyle
+    self.bitmapData = bitmapData
     super.init(environment: environment)
+  }
+
+  /// The member's bitmap composited under `ink` with `backColor` as the
+  /// key, as RGBA at the member's natural size — what the renderer
+  /// uploads and what hit-testing reads coverage from. `nil` for anything
+  /// but a decodable bitmap.
+  public func rgba(ink: SpriteInk, backColorIndex: Int) -> [UInt8]? {
+    guard let properties = chunk.bitmapProperties, let bitmapData,
+      let decoded = BitmapData.decode(bitmapData, expectedByteCount: properties.decodedByteCount)
+    else { return nil }
+    return BitmapConversion.rgba(
+      pixels: decoded.pixels, properties: properties,
+      palette: BuiltinPalette.colors(forMember: properties.paletteMember),
+      ink: ink, backColorIndex: backColorIndex, sourcePlanar: decoded.wasCompressed)
   }
 
   /// The member's current text: a script-set value wins, else the authored
