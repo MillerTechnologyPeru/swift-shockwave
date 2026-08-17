@@ -122,3 +122,40 @@ private func actorNames(_ player: MoviePlayer) -> [String] {
   // very back.
   #expect(order.first == 1)
 }
+
+/// Skipping the intro hands the loading screen to the play manager, which
+/// builds the demo level out of pool sprites (200–999) that have no score
+/// record at all — each gets a member, a loc, a size and an ink from
+/// Lingo. Those puppet-only sprites must reach the renderer's draw order
+/// with the puppeted values folded into their record.
+@MainActor
+@Test func skippingTheIntroPlacesTheDemoLevelOnPoolSprites() throws {
+  let player = try startedPlayer()
+  let loading = try #require(player.movieModel.score?.frame(labeled: "loading"))
+  let deadline = Date().addingTimeInterval(20)
+  while player.currentFrame != loading && Date() < deadline {
+    player.step()
+    Thread.sleep(forTimeInterval: 0.02)
+  }
+  // SKIP INTRO (sprite 16, "loading generic button" with #skip_movie).
+  #expect(player.spriteAt(x: 553, y: 379) == 16)
+  player.dispatch("mouseUp", toSprite: 16)
+
+  let poolSprites = player.drawOrder(forFrame: loading).map(\.spriteNumber).filter { $0 >= 200 }
+  #expect(poolSprites.count > 100)
+  // Every placed piece is a stretched bitmap, and the bricks land on the
+  // stage — the level spans all of it, under the title (a few pieces the
+  // level erased again are parked off-stage at -100,-100, so not all).
+  var onStage = 0
+  for number in poolSprites {
+    let record = try #require(player.effectiveRecord(forSprite: number))
+    #expect(record.isPopulated)
+    #expect(record.stretch)
+    #expect(player.effectiveMember(record, spriteNumber: number)?.chunk.type == .bitmap)
+    let rect = player.spriteRect(record, spriteNumber: number)
+    if rect.left >= 0 && rect.top >= 0 && rect.right <= 650 && rect.bottom <= 420 { onStage += 1 }
+  }
+  #expect(onStage > 100)
+  // The panel that covered the intro area is gone.
+  #expect(!player.isSpriteVisible(11))
+}
