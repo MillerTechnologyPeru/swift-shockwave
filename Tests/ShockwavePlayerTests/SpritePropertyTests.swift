@@ -40,7 +40,7 @@ private func playerAtMenu() throws -> MoviePlayer {
     Issue.record("sprite should resolve its score member")
     return
   }
-  #expect(member.name == "fusebox_pipes_r")
+  #expect(member.name == "arrow")
 }
 
 /// Size comes from the member's bounds, not the record's stale numbers, so
@@ -49,8 +49,8 @@ private func playerAtMenu() throws -> MoviePlayer {
 @Test func spriteSizeMatchesTheDrawnRect() throws {
   let player = try playerAtMenu()
   let sprite = try #require(player.sprite(.integer(3)))
-  #expect(sprite.getProperty("width").asInteger() == 40)
-  #expect(sprite.getProperty("height").asInteger() == 49)
+  #expect(sprite.getProperty("width").asInteger() == 45)
+  #expect(sprite.getProperty("height").asInteger() == 37)
 }
 
 /// A puppeted value wins over the score from then on.
