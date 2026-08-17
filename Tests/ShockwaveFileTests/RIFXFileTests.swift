@@ -463,9 +463,18 @@ private func realMovieData() throws -> Data {
   let channel0 = score.behaviorIntervals.filter { $0.channel == 0 }
   #expect(channel0.count == 10)
   let frameloopUses = score.behaviorIntervals.filter {
-    $0.behaviors.contains(ScoreChunk.BehaviorReference(castLib: 1, member: 6))
+    $0.behaviors.contains { $0.castLib == 1 && $0.member == 6 }
   }
   #expect(frameloopUses.count == 108)
+
+  // Behavior parameters travel as the text of a property list; the
+  // loading screen's "set my locZ" attachments each carry one, while the
+  // frame-script channel's frameloop takes none.
+  let parameterized = score.behaviorIntervals.flatMap(\.behaviors).compactMap(\.initializer)
+  #expect(parameterized.count == 142)
+  #expect(parameterized.allSatisfy { $0.hasPrefix("[") && $0.hasSuffix("]") })
+  #expect(parameterized.contains("[#mylocz: 10000001]"))
+  #expect(channel0.allSatisfy { $0.behaviors.allSatisfy { $0.initializer == nil } })
 }
 
 @Test func realShockwaveMovieIsDetectedAsCompressed() throws {
