@@ -93,20 +93,40 @@ extension MoviePlayer {
     return SpriteRect(left: locH - regX, top: locV - regY, width: width, height: height)
   }
 
-  /// The topmost sprite (Lingo sprite number) whose rect contains
-  /// `(x, y)` at the current frame, or `nil` if none. Channels are tested
-  /// highest-number-first, since higher channels draw on top and win the
-  /// hit. Ink-based matte/per-pixel testing, rotation/skew, and
-  /// click-transparent text pass-through aren't modeled yet — this is a
-  /// bounding-box-only approximation.
-  public func spriteAt(x: Int, y: Int) -> Int? {
-    guard let score = movieModel.score, currentFrame >= 1,
-      currentFrame <= score.chunk.frames.count
-    else { return nil }
-    let frame = score.chunk.frames[currentFrame - 1]
-    for channel in frame.channels.keys.sorted(by: >) where channel >= 6 {
+  /// The populated sprite channels of a frame, back to front: the order
+  /// they draw in, and the reverse of the order they take a hit in.
+  ///
+  /// Director stacks by `locZ`, which defaults to the sprite number, so an
+  /// untouched score draws in channel order — but a behavior that sets
+  /// `locZ` (the sample's "set my locZ", which lifts the loading screen's
+  /// buttons above the black panel in a lower channel) reorders. Ties fall
+  /// back to channel order.
+  public func drawOrder(forFrame frameNumber: Int) -> [(spriteNumber: Int, record: SpriteChannelRecord)] {
+    guard let score = movieModel.score, frameNumber >= 1,
+      frameNumber <= score.chunk.frames.count
+    else { return [] }
+    let frame = score.chunk.frames[frameNumber - 1]
+    var entries: [(spriteNumber: Int, record: SpriteChannelRecord, z: Int)] = []
+    for channel in frame.channels.keys where channel >= 6 {
       guard let record = frame.spriteRecord(channel: channel) else { continue }
       let spriteNumber = channel - 5
+      let z = sprite(.integer(spriteNumber))?.getProperty("locZ").asInteger() ?? spriteNumber
+      entries.append((spriteNumber, record, z))
+    }
+    return entries
+      .sorted { ($0.z, $0.spriteNumber) < ($1.z, $1.spriteNumber) }
+      .map { ($0.spriteNumber, $0.record) }
+  }
+
+  /// The topmost sprite (Lingo sprite number) whose rect contains
+  /// `(x, y)` at the current frame, or `nil` if none. Sprites are tested
+  /// front to back, so whatever draws on top wins the hit. Ink-based
+  /// matte/per-pixel testing, rotation/skew, and click-transparent text
+  /// pass-through aren't modeled yet — this is a bounding-box-only
+  /// approximation.
+  public func spriteAt(x: Int, y: Int) -> Int? {
+    for (spriteNumber, record) in drawOrder(forFrame: currentFrame).reversed()
+    where isSpriteVisible(spriteNumber) {
       if spriteRect(record, spriteNumber: spriteNumber).contains(x: x, y: y) {
         return spriteNumber
       }
