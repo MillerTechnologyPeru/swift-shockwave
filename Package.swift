@@ -77,11 +77,6 @@ let package = Package(
             swiftSettings: [.enableUpcomingFeature("ApproachableConcurrency")]
         ),
         .testTarget(
-            name: "ShockwaveSDL3Tests",
-            dependencies: ["ShockwaveSDL3", "ShockwaveFile"],
-            swiftSettings: [.enableUpcomingFeature("ApproachableConcurrency")]
-        ),
-        .testTarget(
             name: "ShockwavePlayerTests",
             dependencies: [
                 "ShockwavePlayer", "ShockwaveModel", "ShockwaveFile", "ShockwaveTestSupport",
