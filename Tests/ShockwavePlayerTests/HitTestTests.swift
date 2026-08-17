@@ -25,11 +25,12 @@ private func realPlayer() throws -> MoviePlayer {
   // contains the point.
   #expect(player.spriteAt(x: 600, y: 100) == 2)
 
-  // (100, 320) additionally falls inside channel 64 (sprite 59, rect
-  // 78,305,44,29) and channel 16 (sprite 11, rect 92,39,215,324), both
-  // above the backdrop. Channel 64 is the highest of the three, so it
-  // should win over both the backdrop and channel 16.
-  #expect(player.spriteAt(x: 100, y: 320) == 59)
+  // (100, 320) additionally falls inside channel 16 (sprite 11, rect
+  // 92,39,215,324), above the backdrop. Channel 64 (sprite 59) is a 44x26
+  // member registered at (35, 14), so its real rect is 43,291,44,26 — it
+  // ends at y=317 and does NOT cover the point, even though its raw record
+  // (78,305,44,29) would have. Channel 16 is the highest covering channel.
+  #expect(player.spriteAt(x: 100, y: 320) == 11)
 }
 
 @Test func spriteAtReturnsNilOutsideEveryRect() throws {
