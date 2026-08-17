@@ -45,6 +45,16 @@ public final class Sprite: LingoObject {
     }
   }
 
+  /// Forgets everything Lingo set on this channel — what Director does when
+  /// the sprite's span ends: properties a script assigns are puppeted only
+  /// for the life of that span, and the next span in the channel starts
+  /// from the score again. A channel a script has explicitly taken over
+  /// (`puppet = 1`, the playfield's pool sprites) keeps its state.
+  func releasePuppetState() {
+    if let puppet = properties["puppet"], puppet.asBool() { return }
+    properties.removeAll()
+  }
+
   public override func getProperty(_ name: String) -> LingoValue {
     let key = name.asciiLowercased()
     if key == "spritenum" { return .integer(spriteNumber) }
