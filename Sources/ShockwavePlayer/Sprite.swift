@@ -52,7 +52,7 @@ public final class Sprite: LingoObject {
       // `effectiveMember`, which asks the sprite for a puppeted member and
       // would come back here.
       guard
-        let member = player.movieModel.castManager.library(fileNumber: record.castLib)?
+        let member = player.movieModel.castManager.library(scoreCastLib: record.castLib)?
           .member(record.member)
       else { return super.getProperty(name) }
       return key == "member" ? .object(member) : .integer(member.memberNumber)
