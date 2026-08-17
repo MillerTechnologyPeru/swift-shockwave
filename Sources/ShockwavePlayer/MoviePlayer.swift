@@ -25,6 +25,9 @@ public final class MoviePlayer: LingoVMHost {
   public internal(set) var isPlaying = false
 
   private var sprites: [Int: Sprite] = [:]
+  /// The sprite the pointer was last found over, for `mouseEnter`/
+  /// `mouseLeave`/`mouseWithin`; `nil` when over the bare stage.
+  var hoveredSprite: Int?
   /// Live behavior instances for the spans covering `currentFrame`, keyed
   /// by span index in `score.spans`.
   var activeSpans: [Int: [ScriptInstance]] = [:]
