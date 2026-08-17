@@ -17,14 +17,14 @@ private func realMovie() throws -> Movie {
   let movie = try realMovie()
 
   // The loading screen's message member — authored, not just runtime-set.
-  let library14 = try #require(movie.castManager.library(fileNumber: 14))
+  let loading = try #require(movie.castManager.library(named: "loading"))
   let message = try #require(
-    library14.members.values.first { $0.name == "download_msg" })
+    loading.members.values.first { $0.name == "download_msg" })
   #expect(message.authoredText == "READY TO PLAY")
 
   // The loading screen's playable demo level: a full level definition.
   let level = try #require(
-    library14.members.values.first { $0.name == "loading_level" })
+    loading.members.values.first { $0.name == "loading_level" })
   let text = try #require(level.authoredText)
   #expect(text.hasPrefix("[info]"))
   #expect(text.contains("[playfield]"))
@@ -32,15 +32,14 @@ private func realMovie() throws -> Movie {
   #expect(text.contains("[partslist]"))
 }
 
-/// The game's 60 level definitions are authored in the `dynamic` cast (in
-/// the shipped game they stream into `levels` at runtime — this build bakes
-/// them in). Every one must expose a parseable definition, since
-/// `prepareLevelMenu` walks them with `parseParams`.
-@Test func theDynamicCastHoldsAllSixtyLevelDefinitions() throws {
+/// The game's 60 level definitions live in the `levels` cast, exactly as
+/// `prepareLevelMenu` expects (`the number of castMembers of castLib
+/// "levels"`), and every one must expose a parseable definition.
+@Test func theLevelsCastHoldsAllSixtyLevelDefinitions() throws {
   let movie = try realMovie()
-  let dynamicCast = try #require(movie.castManager.library(named: "dynamic"))
+  let levelsCast = try #require(movie.castManager.library(named: "levels"))
   var definitions = 0
-  for (_, member) in dynamicCast.members where member.chunk.type == .xtra {
+  for (_, member) in levelsCast.members where member.chunk.type == .xtra {
     let text = try #require(member.text, "'\(member.name ?? "?")' has no text")
     #expect(text.contains("[info]"), "'\(member.name ?? "?")'")
     #expect(text.contains("[playfield]"), "'\(member.name ?? "?")'")
