@@ -11,24 +11,14 @@ import ShockwavePlayer
 /// any puppeted `Sprite` property bags the running Lingo has set.
 @MainActor
 final class StageRenderer {
-  private let file: RIFXFile
   private let movie: Movie
   private let renderer: SDLRenderer
   /// Textures keyed by library, member, backColor, and ink mode.
   private var textures: [Int: SDLTexture?] = [:]
-  /// BITD chunk ids keyed by owning CASt chunk id.
-  private var bitmapDataIds: [Int: Int] = [:]
 
-  init(file: RIFXFile, movie: Movie, renderer: SDLRenderer) throws {
-    self.file = file
+  init(movie: Movie, renderer: SDLRenderer) {
     self.movie = movie
     self.renderer = renderer
-    if let keyTable = try file.keyTable() {
-      for entry in keyTable.entries
-      where entry.fourCC == "BITD" && entry.childChunkIndex < file.chunkMap.count {
-        bitmapDataIds[entry.ownerChunkIndex] = entry.childChunkIndex
-      }
-    }
   }
 
   func renderFrame(_ frameNumber: Int, player: MoviePlayer) {
@@ -132,16 +122,7 @@ final class StageRenderer {
     var result: SDLTexture?
     defer { textures[key] = result }
 
-    guard let castId = castChunkId(of: member),
-      let bitdId = bitmapDataIds[castId],
-      let data = try? file.chunkData(at: file.chunkMap[bitdId]),
-      let decoded = BitmapData.decode(data, expectedByteCount: properties.decodedByteCount),
-      let rgba = BitmapConversion.rgba(
-        pixels: decoded.pixels, properties: properties,
-        palette: BuiltinPalette.colors(forMember: properties.paletteMember),
-        ink: ink, backColorIndex: backColorIndex,
-        sourcePlanar: decoded.wasCompressed)
-    else { return nil }
+    guard let rgba = member.rgba(ink: ink, backColorIndex: backColorIndex) else { return nil }
 
     let width = properties.bounds.width
     let height = properties.bounds.height
@@ -161,11 +142,4 @@ final class StageRenderer {
     return texture
   }
 
-  /// The member's `CASt` chunk id — the owner its `BITD` hangs off. Carried
-  /// by the member itself from load time; re-deriving it from the cast
-  /// table by slot arithmetic went wrong whenever a cast's first slots were
-  /// empty (member numbers no longer line up with table positions).
-  private func castChunkId(of member: CastMember) -> Int? {
-    member.chunkId
-  }
 }
