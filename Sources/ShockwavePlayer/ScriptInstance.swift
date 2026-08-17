@@ -54,12 +54,16 @@ public final class ScriptInstance: LingoObject {
   /// that matters — hands out VOID instead of the object.
   public override func callMethod(_ name: String, args: [LingoValue]) -> LingoValue {
     if let handler = handler(named: name), let chunk = member.scriptChunk {
-      let result = try? LingoVM.call(
-        handler: handler, chunk: chunk, names: member.scriptNames,
-        args: [.object(self)] + args, receiver: self,
-        host: player, environment: lingoEnvironment, version: player.lingoVersion,
-        capitalX: member.scriptUsesCapitalContext)
-      return result ?? .void
+      do {
+        return try LingoVM.call(
+          handler: handler, chunk: chunk, names: member.scriptNames,
+          args: [.object(self)] + args, receiver: self,
+          host: player, environment: lingoEnvironment, version: player.lingoVersion,
+          capitalX: member.scriptUsesCapitalContext)
+      } catch {
+        player.reportScriptError("\(member.name ?? "?").\(name): \(error)")
+        return .void
+      }
     }
     return super.callMethod(name, args: args)
   }
