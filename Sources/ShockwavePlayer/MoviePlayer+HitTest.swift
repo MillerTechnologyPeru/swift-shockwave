@@ -172,19 +172,59 @@ extension MoviePlayer {
       .map { ($0.spriteNumber, $0.record) }
   }
 
-  /// The topmost sprite (Lingo sprite number) whose rect contains
-  /// `(x, y)` at the current frame, or `nil` if none. Sprites are tested
-  /// front to back, so whatever draws on top wins the hit. Ink-based
-  /// matte/per-pixel testing, rotation/skew, and click-transparent text
-  /// pass-through aren't modeled yet — this is a bounding-box-only
-  /// approximation.
+  /// The topmost sprite (Lingo sprite number) under `(x, y)` at the
+  /// current frame, or `nil` if none. Sprites are tested front to back, so
+  /// whatever draws on top wins the hit.
+  ///
+  /// A bitmap drawn with a transparent ink only takes the hit where it
+  /// actually paints: Director lets the pointer fall through the keyed
+  /// pixels, which is what makes the sample's bricks reachable under its
+  /// full-stage, background-transparent title. Copy-ink bitmaps and every
+  /// other member type are tested by rect. Rotation/skew aren't modeled.
   public func spriteAt(x: Int, y: Int) -> Int? {
     for (spriteNumber, record) in drawOrder(forFrame: currentFrame).reversed()
     where isSpriteVisible(spriteNumber) {
-      if spriteRect(record, spriteNumber: spriteNumber).contains(x: x, y: y) {
+      let rect = spriteRect(record, spriteNumber: spriteNumber)
+      guard rect.contains(x: x, y: y) else { continue }
+      if paints(record, spriteNumber: spriteNumber, rect: rect, x: x, y: y) {
         return spriteNumber
       }
     }
     return nil
+  }
+
+  /// Whether the sprite puts a pixel at stage point `(x, y)`, known to be
+  /// inside `rect`. Anything without decodable bitmap coverage under a
+  /// transparent ink counts as painting its whole rect.
+  private func paints(
+    _ record: SpriteChannelRecord, spriteNumber: Int, rect: SpriteRect, x: Int, y: Int
+  ) -> Bool {
+    let ink = SpriteInk(inkNumber: record.ink)
+    guard ink != .copy, let member = effectiveMember(record, spriteNumber: spriteNumber),
+      let properties = member.chunk.bitmapProperties
+    else { return true }
+    let width = properties.bounds.width
+    let height = properties.bounds.height
+    guard width > 0, height > 0, rect.width > 0, rect.height > 0 else { return true }
+    let key = HitMaskKey(
+      library: member.libraryNumber, member: member.memberNumber, ink: ink,
+      backColor: record.backColor)
+    let mask: [Bool]
+    if let cached = hitMasks[key] {
+      mask = cached
+    } else {
+      guard let rgba = member.rgba(ink: ink, backColorIndex: record.backColor) else {
+        hitMasks[key] = []
+        return true
+      }
+      mask = stride(from: 3, to: rgba.count, by: 4).map { rgba[$0] != 0 }
+      hitMasks[key] = mask
+    }
+    guard mask.count == width * height else { return true }
+    // Map the stage point back into the member's own pixels, undoing any
+    // stretch.
+    let sourceX = min(width - 1, (x - rect.left) * width / rect.width)
+    let sourceY = min(height - 1, (y - rect.top) * height / rect.height)
+    return mask[sourceY * width + sourceX]
   }
 }
