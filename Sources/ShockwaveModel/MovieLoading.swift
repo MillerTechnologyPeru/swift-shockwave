@@ -23,10 +23,6 @@ extension Movie {
         CastLibrary(number: libraryNumber, entry: entry, members: members, environment: environment)
       )
     }
-    libraries.append(
-      contentsOf: try unlistedLibraries(
-        after: libraries, castList: castList, file: file, keyTable: keyTable,
-        environment: environment))
 
     var score: Score?
     if let scoreChunk = try file.score() {
@@ -41,43 +37,6 @@ extension Movie {
     return Movie(
       castManager: CastManager(libraries: libraries), score: score, fileVersion: fileVersion,
       frameRate: frameRate, environment: environment)
-  }
-
-  /// Cast libraries that own a `CAS*` table but have no `MCsL` entry.
-  ///
-  /// The cast list is not a reliable census of a movie's libraries. The
-  /// junkbot sample carries fourteen cast tables but only thirteen list
-  /// entries, and the unlisted one holds 28 real members — including the
-  /// `download manager` script every other subsystem calls into. Building
-  /// libraries from the list alone silently discards them, so any table the
-  /// list doesn't claim becomes a library here, numbered after the listed
-  /// ones.
-  private static func unlistedLibraries(
-    after listed: [CastLibrary],
-    castList: CastListChunk,
-    file: RIFXFile,
-    keyTable: KeyTableChunk?,
-    environment: LingoEnvironment
-  ) throws -> [CastLibrary] {
-    guard let keyTable else { return [] }
-    let claimed = Set(castList.entries.compactMap(\.resourceId))
-    var recovered: [CastLibrary] = []
-    for relationship in keyTable.entries
-    where relationship.fourCC == "CAS*" && !claimed.contains(relationship.ownerChunkIndex) {
-      // The list is what names a library and fixes its member numbering, so
-      // an unlisted one gets no name and the default 1-based numbering.
-      let entry = CastListEntry(
-        name: "", filePath: "", preloadMode: nil, minMember: nil, maxMember: nil,
-        resourceId: relationship.ownerChunkIndex)
-      let number = listed.count + recovered.count + 1
-      let members = try loadMembers(
-        for: entry, libraryNumber: number, file: file, keyTable: keyTable,
-        environment: environment)
-      guard !members.isEmpty else { continue }
-      recovered.append(
-        CastLibrary(number: number, entry: entry, members: members, environment: environment))
-    }
-    return recovered
   }
 
   /// Joins a cast library's members to their compiled scripts: `CAS*` gives
@@ -147,7 +106,7 @@ extension Movie {
         authoredText = XMediaText.text(from: data)
       }
       members[memberNumber] = CastMember(
-        libraryNumber: libraryNumber, memberNumber: memberNumber, chunk: chunk,
+        libraryNumber: libraryNumber, memberNumber: memberNumber, chunkId: memberId, chunk: chunk,
         scriptChunk: scriptChunk, scriptNames: scriptNames,
         scriptUsesCapitalContext: capitalContext, authoredText: authoredText,
         environment: environment)
