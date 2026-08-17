@@ -67,3 +67,58 @@ private func actorNames(_ player: MoviePlayer) -> [String] {
   }
   #expect(player.currentFrame == loading)
 }
+
+/// Director performs a `go`'s frame change inside the call — the new
+/// frame's `beginSprite`s have run by the time the calling handler's next
+/// line executes. The download manager relies on that: it does
+/// `go("loading")` and then sets the loading frame's bricks visible over
+/// the top of a behavior whose `beginSprite` hides them, then drops them
+/// into place from `stepFrame`. Deferring the transition would leave every
+/// brick hidden.
+@MainActor
+@Test func loadingBricksSurviveTheirHidingBehavior() throws {
+  let player = try startedPlayer()
+  let loading = try #require(player.movieModel.score?.frame(labeled: "loading"))
+  let deadline = Date().addingTimeInterval(20)
+  // Run until the bricks (sprites 21–34) have all landed on their score
+  // positions, or give up.
+  var landed = false
+  while !landed && Date() < deadline {
+    player.step()
+    Thread.sleep(forTimeInterval: 0.02)
+    guard player.currentFrame == loading else { continue }
+    landed = (21...34).allSatisfy { number in
+      guard let sprite = player.sprite(.integer(number)),
+        let record = player.currentRecord(forSprite: number)
+      else { return false }
+      return sprite.getProperty("locV").asInteger() == record.top
+    }
+  }
+  #expect(landed)
+  #expect((21...34).allSatisfy { player.isSpriteVisible($0) })
+}
+
+/// A behavior's authored parameters (`[#mylocz: 10000001]` in the score)
+/// are applied to the instance before `beginSprite`, so "set my locZ" can
+/// lift the loading screen's buttons above the black panel that sits in a
+/// lower channel, and the generic buttons know which message they send.
+@MainActor
+@Test func behaviorParametersReachTheInstance() throws {
+  let player = try startedPlayer()
+  let loading = try #require(player.movieModel.score?.frame(labeled: "loading"))
+  player.jump(to: loading)
+  // Sprite 8 (play button) is under sprite 11 (the panel) in channel order
+  // but both carry locZ 10000001, so channel order still decides — while
+  // sprite 21 (a brick, locZ 10000010) now draws above them all.
+  #expect(player.sprite(.integer(8))?.getProperty("locZ").asInteger() == 10_000_001)
+  #expect(player.sprite(.integer(21))?.getProperty("locZ").asInteger() == 10_000_010)
+  let order = player.drawOrder(forFrame: loading).map(\.spriteNumber)
+  let index8 = try #require(order.firstIndex(of: 8))
+  let index11 = try #require(order.firstIndex(of: 11))
+  let index21 = try #require(order.firstIndex(of: 21))
+  #expect(index8 < index11)
+  #expect(index11 < index21)
+  // Sprite 1 sets no locZ, so it keeps its channel number and stays at the
+  // very back.
+  #expect(order.first == 1)
+}
