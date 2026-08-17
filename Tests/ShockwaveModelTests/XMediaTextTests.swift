@@ -39,12 +39,23 @@ private func realMovie() throws -> Movie {
   let movie = try realMovie()
   let loading = try #require(movie.castManager.library(named: "loading"))
   let message = try #require(loading.members.values.first { $0.name == "download_msg" })
-  #expect(message.textStyle == XMediaText.Style(fontName: "04b_08 *", fontSize: 10))
+  #expect(
+    message.textStyle
+      == XMediaText.Style(
+        fontName: "04b_08 *", fontSize: 10, fixedLineSpace: 15, alignment: "center"))
   #expect(message.getProperty("font").asString() == "04b_08 *")
   #expect(message.getProperty("fontSize").asInteger() == 10)
   let welcome = try #require(loading.members.values.first { $0.name == "loading bkg text" })
   #expect(welcome.textStyle?.fontName == "04b_08 *")
   #expect(welcome.textStyle?.fontSize == 10)
+  // The level menu's columns are ruled at 21px and the moves column is
+  // right-aligned — paragraph formats the members carry themselves.
+  let numbers = try #require(loading.members.values.first { $0.name == "level.num" }
+    ?? movie.castManager.member(named: "level.num"))
+  #expect(numbers.textStyle?.fixedLineSpace == 21)
+  let moves = try #require(movie.castManager.member(named: "level.moves"))
+  #expect(moves.textStyle?.fixedLineSpace == 21)
+  #expect(moves.textStyle?.alignment == "right")
   // A level definition is data, set in Arial like a plain field.
   let level = try #require(loading.members.values.first { $0.name == "loading_level" })
   #expect(level.textStyle?.fontName == "Arial")
