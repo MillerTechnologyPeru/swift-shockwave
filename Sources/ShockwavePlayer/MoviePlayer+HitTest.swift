@@ -22,8 +22,7 @@ extension MoviePlayer {
   /// own reference, unless the running Lingo has puppeted a different
   /// member onto the channel.
   public func effectiveMember(_ record: SpriteChannelRecord, spriteNumber: Int) -> CastMember? {
-    if let sprite = sprite(.integer(spriteNumber)),
-      case .object(let memberObject) = sprite.getProperty("member"),
+    if case .object(let memberObject)? = existingSprite(spriteNumber)?.puppeted("member"),
       let castMember = memberObject as? CastMember
     {
       return castMember
@@ -40,6 +39,51 @@ extension MoviePlayer {
     return score.chunk.frames[currentFrame - 1].spriteRecord(channel: spriteNumber + 5)
   }
 
+  /// The record a sprite channel is drawn from: the score's record for the
+  /// current frame with every property the running Lingo has puppeted
+  /// folded over it — member, ink, blend, colors, size (which turns on
+  /// stretch, as setting `width`/`height` does in Director) and position.
+  ///
+  /// A channel the score leaves empty still yields a record once Lingo has
+  /// given it a member; that is what lets a puppet-only sprite exist at
+  /// all. `nil` means there is nothing to draw on this channel.
+  public func effectiveRecord(forSprite spriteNumber: Int) -> SpriteChannelRecord? {
+    let scored = currentRecord(forSprite: spriteNumber)
+    guard let sprite = existingSprite(spriteNumber) else { return scored }
+    var record: SpriteChannelRecord
+    if let scored {
+      record = scored
+    } else if case .object(let object)? = sprite.puppeted("member"),
+      object is CastMember
+    {
+      record = .empty
+    } else {
+      return nil
+    }
+    if case .object(let object)? = sprite.puppeted("member"), let member = object as? CastMember {
+      record.castLib = member.libraryNumber
+      record.member = member.memberNumber
+    }
+    if let ink = sprite.puppeted("ink")?.asInteger() { record.ink = ink }
+    if let foreColor = sprite.puppeted("foreColor")?.asInteger() { record.foreColor = foreColor }
+    if let backColor = sprite.puppeted("backColor")?.asInteger() { record.backColor = backColor }
+    if let blend = sprite.puppeted("blend")?.asInteger() {
+      record.blendEnabled = true
+      record.blendAmount = 255 - Swift.max(0, Swift.min(100, blend)) * 255 / 100
+    }
+    if let width = sprite.puppeted("width")?.asInteger() {
+      record.width = width
+      record.stretch = true
+    }
+    if let height = sprite.puppeted("height")?.asInteger() {
+      record.height = height
+      record.stretch = true
+    }
+    if let locH = sprite.puppeted("locH")?.asInteger() { record.left = locH }
+    if let locV = sprite.puppeted("locV")?.asInteger() { record.top = locV }
+    return record
+  }
+
   /// Whether a sprite channel is currently showing.
   ///
   /// Scripts hide and reveal whole groups of sprites by setting
@@ -47,8 +91,7 @@ extension MoviePlayer {
   /// necessarily on screen. An untouched channel has no `visible` property
   /// at all, which means visible — only an explicit false hides it.
   public func isSpriteVisible(_ spriteNumber: Int) -> Bool {
-    guard let sprite = sprite(.integer(spriteNumber)) else { return true }
-    let visible = sprite.getProperty("visible")
+    guard let visible = existingSprite(spriteNumber)?.puppeted("visible") else { return true }
     if case .void = visible { return true }
     return visible.asBool()
   }
@@ -83,12 +126,9 @@ extension MoviePlayer {
 
     var locH = record.left
     var locV = record.top
-    if let sprite = sprite(.integer(spriteNumber)),
-      let puppetH = sprite.getProperty("locH").asInteger(),
-      let puppetV = sprite.getProperty("locV").asInteger()
-    {
-      locH = puppetH
-      locV = puppetV
+    if let sprite = existingSprite(spriteNumber) {
+      if let puppetH = sprite.puppeted("locH")?.asInteger() { locH = puppetH }
+      if let puppetV = sprite.puppeted("locV")?.asInteger() { locV = puppetV }
     }
     return SpriteRect(left: locH - regX, top: locV - regY, width: width, height: height)
   }
@@ -101,16 +141,30 @@ extension MoviePlayer {
   /// `locZ` (the sample's "set my locZ", which lifts the loading screen's
   /// buttons above the black panel in a lower channel) reorders. Ties fall
   /// back to channel order.
+  ///
+  /// Channels the score populates on the frame are joined by any sprite
+  /// Lingo has puppeted a member onto (`effectiveRecord(forSprite:)`), so a
+  /// level built entirely from pool sprites draws too. Only the current
+  /// frame carries puppet state.
   public func drawOrder(forFrame frameNumber: Int) -> [(spriteNumber: Int, record: SpriteChannelRecord)] {
     guard let score = movieModel.score, frameNumber >= 1,
       frameNumber <= score.chunk.frames.count
     else { return [] }
     let frame = score.chunk.frames[frameNumber - 1]
+    var numbers = Set(frame.channels.keys.filter { $0 >= 6 }.map { $0 - 5 })
+    if frameNumber == currentFrame {
+      numbers.formUnion(puppetedSpriteNumbers())
+    }
     var entries: [(spriteNumber: Int, record: SpriteChannelRecord, z: Int)] = []
-    for channel in frame.channels.keys where channel >= 6 {
-      guard let record = frame.spriteRecord(channel: channel) else { continue }
-      let spriteNumber = channel - 5
-      let z = sprite(.integer(spriteNumber))?.getProperty("locZ").asInteger() ?? spriteNumber
+    for spriteNumber in numbers {
+      let record: SpriteChannelRecord?
+      if frameNumber == currentFrame {
+        record = effectiveRecord(forSprite: spriteNumber)
+      } else {
+        record = frame.spriteRecord(channel: spriteNumber + 5)
+      }
+      guard let record else { continue }
+      let z = existingSprite(spriteNumber)?.puppeted("locZ")?.asInteger() ?? spriteNumber
       entries.append((spriteNumber, record, z))
     }
     return entries
