@@ -1,3 +1,4 @@
+import Foundation
 import LingoBytecode
 import LingoRuntime
 import ShockwaveFile
@@ -82,12 +83,15 @@ extension Movie {
     // runtime messages) carry an `XMED`.
     var textChunkIds: [Int: Int] = [:]
     var mediaChunkIds: [Int: Int] = [:]
+    var bitmapChunkIds: [Int: Int] = [:]
     for relationship in keyTable?.entries ?? [] {
       guard relationship.childChunkIndex < file.chunkMap.count else { continue }
       if relationship.fourCC == "STXT" {
         textChunkIds[relationship.ownerChunkIndex] = relationship.childChunkIndex
       } else if relationship.fourCC == "XMED" {
         mediaChunkIds[relationship.ownerChunkIndex] = relationship.childChunkIndex
+      } else if relationship.fourCC == "BITD" {
+        bitmapChunkIds[relationship.ownerChunkIndex] = relationship.childChunkIndex
       }
     }
 
@@ -107,11 +111,15 @@ extension Movie {
         authoredText = XMediaText.text(from: data)
         textStyle = XMediaText.style(from: data)
       }
+      var bitmapData: Data?
+      if chunk.type == .bitmap, let bitmapId = bitmapChunkIds[memberId] {
+        bitmapData = try? file.chunkData(at: file.chunkMap[bitmapId])
+      }
       members[memberNumber] = CastMember(
         libraryNumber: libraryNumber, memberNumber: memberNumber, chunkId: memberId, chunk: chunk,
         scriptChunk: scriptChunk, scriptNames: scriptNames,
         scriptUsesCapitalContext: capitalContext, authoredText: authoredText,
-        textStyle: textStyle, environment: environment)
+        textStyle: textStyle, bitmapData: bitmapData, environment: environment)
     }
     return members
   }
