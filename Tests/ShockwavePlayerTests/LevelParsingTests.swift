@@ -27,7 +27,7 @@ import Testing
   }
 
   let level = try #require(
-    movie.castManager.library(fileNumber: 14)?.members.values.first {
+    movie.castManager.library(named: "loading")?.members.values.first {
       $0.name == "loading_level"
     })
   let parsed = configManager.callMethod("parseParams", args: [.string(level.text ?? "")])
