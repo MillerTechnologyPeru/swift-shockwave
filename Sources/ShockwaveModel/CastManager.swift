@@ -6,8 +6,47 @@ import ShockwaveFile
 public final class CastManager {
   public private(set) var libraries: [CastLibrary]
 
+  /// Members by lowercased name, first library first — the resolution
+  /// order `member("name")` follows. Built once at load: every by-name
+  /// lookup (and `new(script("name"))`) otherwise walks every member of
+  /// every library, which in a movie with ~1400 members is the dominant
+  /// cost of running any script that names a member.
+  private let membersByName: [String: CastMember]
+  /// Script members by lowercased name, parent scripts winning over other
+  /// script types — the preference `new(script(...))` needs.
+  private let scriptsByName: [String: CastMember]
+
   public init(libraries: [CastLibrary]) {
     self.libraries = libraries
+
+    var byName: [String: CastMember] = [:]
+    var scripts: [String: CastMember] = [:]
+    for library in libraries {
+      for member in library.members.values.sorted(by: { $0.memberNumber < $1.memberNumber }) {
+        guard let name = member.name?.asciiLowercased(), !name.isEmpty else { continue }
+        if byName[name] == nil { byName[name] = member }
+        guard member.chunk.type == .script else { continue }
+        if member.scriptType == .parent {
+          // A parent script wins outright; otherwise first one seen.
+          if scripts[name]?.scriptType != .parent { scripts[name] = member }
+        } else if scripts[name] == nil {
+          scripts[name] = member
+        }
+      }
+    }
+    self.membersByName = byName
+    self.scriptsByName = scripts
+  }
+
+  /// The member a `member("name")` lookup resolves to, or `nil`.
+  public func member(named name: String) -> CastMember? {
+    membersByName[name.asciiLowercased()]
+  }
+
+  /// The script member `new(script("name"))` instantiates, preferring a
+  /// parent script when several share the name.
+  public func scriptMember(named name: String) -> CastMember? {
+    scriptsByName[name.asciiLowercased()]
   }
 
   public func library(number: Int) -> CastLibrary? {
