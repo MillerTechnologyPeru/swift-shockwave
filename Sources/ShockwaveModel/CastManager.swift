@@ -57,14 +57,23 @@ public final class CastManager {
     libraries.first { $0.libraryName.caseInsensitiveEquals(name) }
   }
 
-  /// Resolves the file-internal library numbering used by `Sord` entries and
-  /// score behavior references (`CastLibrary.fileNumber`).
+  /// Resolves the file-internal owner-id numbering (`CastLibrary.fileNumber`,
+  /// the high 16 bits of a cast's key-table owner id). Note the score does
+  /// NOT use this numbering: sprite records and behavior references carry
+  /// Lingo's library number — the cast's 1-based `MCsL` position — which
+  /// diverges from the owner id wherever ids are skipped (junkbot skips 8).
   public func library(fileNumber: Int) -> CastLibrary? {
     libraries.first { $0.fileNumber == fileNumber }
   }
 
+  /// The library a score record's or behavior reference's `castLib` names:
+  /// Lingo's library number, i.e. `MCsL` position.
+  public func library(scoreCastLib castLib: Int) -> CastLibrary? {
+    library(number: castLib)
+  }
+
   public func member(_ reference: ScoreChunk.BehaviorReference) -> CastMember? {
-    library(fileNumber: reference.castLib)?.member(reference.member)
+    library(scoreCastLib: reference.castLib)?.member(reference.member)
   }
 
   /// Looks up a member by number, optionally scoped to one library. With no
