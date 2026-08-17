@@ -3,7 +3,7 @@ import ShockwaveFile
 
 /// Converts decoded `BITD` pixel rows into RGBA8888 (byte order R,G,B,A)
 /// for SDL textures.
-enum BitmapConversion {
+public enum BitmapConversion {
   /// - Parameters:
   ///   - ink: how the keyed pixels are treated. `.copy` composites every
   ///     pixel opaque; `.backgroundTransparent` clears every keyed pixel;
@@ -20,7 +20,7 @@ enum BitmapConversion {
   ///     than interleaved high/low pairs per pixel. Byte-run-compressed BITD
   ///     chunks store 16-bit rows planar; raw/uncompressed ones store them
   ///     interleaved. Ignored for every other bit depth.
-  static func rgba(
+  public static func rgba(
     pixels: [UInt8],
     properties: BitmapMemberProperties,
     palette: [PaletteChunk.Color],
