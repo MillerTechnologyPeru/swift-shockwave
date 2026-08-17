@@ -32,6 +32,24 @@ private func realMovie() throws -> Movie {
   #expect(text.contains("[partslist]"))
 }
 
+/// The messages are set in the movie's embedded pixel font, 04b_08, at 10
+/// point — that is what the loading screen's captions must be drawn with,
+/// not a system default.
+@Test func xtraTextMembersCarryTheirFontAndSize() throws {
+  let movie = try realMovie()
+  let loading = try #require(movie.castManager.library(named: "loading"))
+  let message = try #require(loading.members.values.first { $0.name == "download_msg" })
+  #expect(message.textStyle == XMediaText.Style(fontName: "04b_08 *", fontSize: 10))
+  #expect(message.getProperty("font").asString() == "04b_08 *")
+  #expect(message.getProperty("fontSize").asInteger() == 10)
+  let welcome = try #require(loading.members.values.first { $0.name == "loading bkg text" })
+  #expect(welcome.textStyle?.fontName == "04b_08 *")
+  #expect(welcome.textStyle?.fontSize == 10)
+  // A level definition is data, set in Arial like a plain field.
+  let level = try #require(loading.members.values.first { $0.name == "loading_level" })
+  #expect(level.textStyle?.fontName == "Arial")
+}
+
 /// The game's 60 level definitions live in the `levels` cast, exactly as
 /// `prepareLevelMenu` expects (`the number of castMembers of castLib
 /// "levels"`), and every one must expose a parseable definition.
