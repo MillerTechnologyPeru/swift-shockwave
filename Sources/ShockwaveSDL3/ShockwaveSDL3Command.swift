@@ -101,8 +101,8 @@ struct ShockwaveSDL3Command: AsyncParsableCommand {
           continue
         }
         let hit = player.spriteAt(x: parts[0], y: parts[1])
-        player.dispatch("mouseDown", toSprite: hit)
-        player.dispatch("mouseUp", toSprite: hit)
+        player.pressMouse(x: parts[0], y: parts[1])
+        player.releaseMouse(x: parts[0], y: parts[1])
         print("clicked \(parts[0]),\(parts[1]) -> sprite \(hit.map(String.init) ?? "none")")
         stepAWhile()
       }
@@ -134,12 +134,12 @@ struct ShockwaveSDL3Command: AsyncParsableCommand {
           } else {
             player.dispatch("keyDown")
           }
+        case .mouseMotion(_, let x, let y, _):
+          player.moveMouse(x: Int(x), y: Int(y))
         case .mouseButtonDown(_, let x, let y, _):
-          let hit = player.spriteAt(x: Int(x), y: Int(y))
-          player.dispatch("mouseDown", toSprite: hit)
+          player.pressMouse(x: Int(x), y: Int(y))
         case .mouseButtonUp(_, let x, let y, _):
-          let hit = player.spriteAt(x: Int(x), y: Int(y))
-          player.dispatch("mouseUp", toSprite: hit)
+          player.releaseMouse(x: Int(x), y: Int(y))
         default:
           break
         }
