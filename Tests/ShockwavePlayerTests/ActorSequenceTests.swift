@@ -158,4 +158,25 @@ private func actorNames(_ player: MoviePlayer) -> [String] {
   #expect(onStage > 100)
   // The panel that covered the intro area is gone.
   #expect(!player.isSpriteVisible(11))
+
+  // Junkbot himself: a MINIFIG part split into four stacked segment
+  // sprites (the legoparts manager sizes its piece table with
+  // `piecedata.count`; that once answered VOID and he was never built),
+  // driven by a walk actor the play manager registered.
+  guard
+    case .object(let object) = player.movieModel.lingoEnvironment.getGlobal("glob")
+      .listGetAProp(.symbol("PLAYER")).listGetAProp(.symbol("play_manager")),
+    let playManager = object as? ScriptInstance,
+    case .object(let field) = playManager.getProperty("playfield_manager"),
+    case .listType(let parts) = field.getProperty("partslist")
+  else {
+    Issue.record("no playfield")
+    return
+  }
+  let junkbot = parts.elements.first {
+    $0.listGetAProp(.symbol("type")).asString().uppercased() == "MINIFIG"
+  }
+  #expect(junkbot != nil)
+  #expect(junkbot?.listGetAProp(.symbol("sprite")).count.asInteger() == 4)
+  #expect((playManager.getProperty("myactors").count.asInteger() ?? 0) >= 1)
 }
