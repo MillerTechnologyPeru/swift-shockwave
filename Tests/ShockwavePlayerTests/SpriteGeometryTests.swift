@@ -20,21 +20,21 @@ private func player() throws -> (MoviePlayer, ScoreChunk) {
 @MainActor
 @Test func unstretchedSpriteUsesMemberBoundsNotRecordSize() throws {
   let (player, score) = try player()
-  // Frame 9 channel 12 is `lite_number_2`, a 12x15 member whose record
-  // still carries a stale 136x30. Without the stretch flag the member wins.
-  let record = try #require(score.frames[8].spriteRecord(channel: 12))
+  // Frame 5 channel 53 is `MINIFIG_WALK_R_3_s1`, a 29x17 member whose
+  // record carries a stale 29x18. Without the stretch flag the member wins.
+  let record = try #require(score.frames[4].spriteRecord(channel: 53))
   #expect(!record.stretch)
-  #expect((record.width, record.height) == (136, 30))
+  #expect((record.width, record.height) == (29, 18))
 
-  let rect = player.spriteRect(record, spriteNumber: 12 - 5)
-  #expect((rect.width, rect.height) == (12, 15))
+  let rect = player.spriteRect(record, spriteNumber: 53 - 5)
+  #expect((rect.width, rect.height) == (29, 17))
 }
 
 @MainActor
 @Test func stretchedSpriteKeepsRecordSize() throws {
   let (player, score) = try player()
-  // Channel 16 (`door`) is one of the sample's few genuinely stretched
-  // sprites: a 57x79 member drawn at 436x426.
+  // Frame 9 channel 16 (`gmlb_box_2`) is one of the sample's few genuinely
+  // stretched sprites: a 10x10 member drawn at 436x426.
   let record = try #require(score.frames[8].spriteRecord(channel: 16))
   #expect(record.stretch)
 
@@ -45,23 +45,23 @@ private func player() throws -> (MoviePlayer, ScoreChunk) {
 @MainActor
 @Test func rectIsOffsetByRegistrationPoint() throws {
   let (player, score) = try player()
-  // `fusebox_pipes_r` registers at (20, 24), so a record locating it at
-  // (56, 170) puts the sprite's corner 20 left and 24 up from there.
+  // `arrow` registers at (22, 18), so a record locating it at (56, 170)
+  // puts the sprite's corner 22 left and 18 up from there.
   let record = try #require(score.frames[8].spriteRecord(channel: 8))
   #expect((record.left, record.top) == (56, 170))
 
   let rect = player.spriteRect(record, spriteNumber: 8 - 5)
-  #expect((rect.left, rect.top) == (36, 146))
-  #expect((rect.width, rect.height) == (40, 49))
+  #expect((rect.left, rect.top) == (34, 152))
+  #expect((rect.width, rect.height) == (45, 37))
 }
 
 @MainActor
 @Test func registrationOffsetScalesWithStretch() throws {
   let (player, score) = try player()
-  // `door` registers at (28, 39) on a 57x79 member drawn at 436x426, so
-  // the offset scales by the same factors rather than staying at (28, 39).
+  // `gmlb_box_2` registers at (5, 5) on a 10x10 member drawn at 436x426,
+  // so the offset scales by the same factors rather than staying at (5, 5).
   let record = try #require(score.frames[8].spriteRecord(channel: 16))
   let rect = player.spriteRect(record, spriteNumber: 16 - 5)
-  #expect(rect.left == 246 - 28 * 436 / 57)
-  #expect(rect.top == 210 - 39 * 426 / 79)
+  #expect(rect.left == 246 - 5 * 436 / 10)
+  #expect(rect.top == 210 - 5 * 426 / 10)
 }
