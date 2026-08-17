@@ -1,5 +1,6 @@
 import ArgumentParser
 import CSDL3
+import SDL3Swift
 import Foundation
 import LingoRuntime
 import ShockwaveFile
@@ -38,24 +39,17 @@ struct ShockwaveSDL3Command: AsyncParsableCommand {
     let stage = config?.stageRect ?? DirectorRect(top: 0, left: 0, bottom: 480, right: 640)
     let player = MoviePlayer(movie: movie)
 
-    guard SDL_Init(SDL_INIT_VIDEO) else {
-      throw SDLError(description: "SDL_Init failed: \(String(cString: SDL_GetError()))")
-    }
-    defer { SDL_Quit() }
+    try SDL.initialize(subSystems: [.video])
+    defer { SDL.quit() }
 
     let title = URL(fileURLWithPath: moviePath).lastPathComponent
-    // SDL_WINDOW_HIDDEN; the C macro wraps SDL_UINT64_C and doesn't import.
-    let windowFlags: SDL_WindowFlags = screenshot != nil ? 0x8 : 0
-    guard
-      let window = SDL_CreateWindow(title, Int32(stage.width), Int32(stage.height), windowFlags),
-      let renderer = SDL_CreateRenderer(window, nil)
-    else {
-      throw SDLError(description: "SDL window/renderer failed: \(String(cString: SDL_GetError()))")
-    }
-    defer {
-      SDL_DestroyRenderer(renderer)
-      SDL_DestroyWindow(window)
-    }
+    let windowOptions: BitMaskOptionSet<SDLWindow.Option> = screenshot != nil ? [.hidden] : []
+    let window = try SDLWindow(
+      title: title, 
+      frame: (x: .centered, y: .centered, width: stage.width, height: stage.height),
+      options: windowOptions
+    )
+    let renderer = try SDLRenderer(window: window)
 
     let stageRenderer = try StageRenderer(file: file, movie: movie, renderer: renderer)
 
@@ -92,10 +86,10 @@ struct ShockwaveSDL3Command: AsyncParsableCommand {
         SDL_Delay(UInt32(player.frameDelayMs.rounded()))
       }
       flushTranscript()
-      SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255)
-      SDL_RenderClear(renderer)
+      try renderer.setDrawColor(red: 255, green: 255, blue: 255, alpha: 255)
+      try renderer.clear()
       stageRenderer.renderFrame(player.currentFrame, player: player)
-      guard let surface = SDL_RenderReadPixels(renderer, nil) else {
+      guard let surface = SDL_RenderReadPixels(renderer.unsafePointer, nil) else {
         throw SDLError(description: "SDL_RenderReadPixels failed: \(String(cString: SDL_GetError()))")
       }
       defer { SDL_DestroySurface(surface) }
@@ -108,23 +102,22 @@ struct ShockwaveSDL3Command: AsyncParsableCommand {
     }
 
     var running = true
-    var event = SDL_Event()
     while running {
-      while SDL_PollEvent(&event) {
-        switch event.type {
-        case SDL_EVENT_QUIT.rawValue:
+      while let event = SDL.pollEvent() {
+        switch event {
+        case .quit:
           running = false
-        case SDL_EVENT_KEY_DOWN.rawValue:
-          if event.key.key == SDLK_ESCAPE {
+        case .keyDown(_, let keycode):
+          if keycode.rawValue == UInt32(SDLK_ESCAPE) {
             running = false
           } else {
             player.dispatch("keyDown")
           }
-        case SDL_EVENT_MOUSE_BUTTON_DOWN.rawValue:
-          let hit = player.spriteAt(x: Int(event.button.x), y: Int(event.button.y))
+        case .mouseButtonDown(_, let x, let y, _):
+          let hit = player.spriteAt(x: Int(x), y: Int(y))
           player.dispatch("mouseDown", toSprite: hit)
-        case SDL_EVENT_MOUSE_BUTTON_UP.rawValue:
-          let hit = player.spriteAt(x: Int(event.button.x), y: Int(event.button.y))
+        case .mouseButtonUp(_, let x, let y, _):
+          let hit = player.spriteAt(x: Int(x), y: Int(y))
           player.dispatch("mouseUp", toSprite: hit)
         default:
           break
@@ -136,10 +129,10 @@ struct ShockwaveSDL3Command: AsyncParsableCommand {
         flushTranscript()
       }
 
-      SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255)
-      SDL_RenderClear(renderer)
+      try renderer.setDrawColor(red: 255, green: 255, blue: 255, alpha: 255)
+      try renderer.clear()
       stageRenderer.renderFrame(player.currentFrame, player: player)
-      SDL_RenderPresent(renderer)
+      renderer.present()
       SDL_Delay(UInt32(player.frameDelayMs.rounded()))
     }
 

@@ -1,4 +1,5 @@
 import CSDL3
+import SDL3Swift
 import Foundation
 import LingoRuntime
 import ShockwaveFile
@@ -12,13 +13,13 @@ import ShockwavePlayer
 final class StageRenderer {
   private let file: RIFXFile
   private let movie: Movie
-  private let renderer: OpaquePointer
+  private let renderer: SDLRenderer
   /// Textures keyed by library, member, backColor, and ink mode.
-  private var textures: [Int: UnsafeMutablePointer<SDL_Texture>?] = [:]
+  private var textures: [Int: SDLTexture?] = [:]
   /// BITD chunk ids keyed by owning CASt chunk id.
   private var bitmapDataIds: [Int: Int] = [:]
 
-  init(file: RIFXFile, movie: Movie, renderer: OpaquePointer) throws {
+  init(file: RIFXFile, movie: Movie, renderer: SDLRenderer) throws {
     self.file = file
     self.movie = movie
     self.renderer = renderer
@@ -47,12 +48,12 @@ final class StageRenderer {
     // geometry both come from the player, so rendering and hit-testing
     // can't drift apart.
     let rect = player.spriteRect(record, spriteNumber: spriteNumber)
-    var destination = SDL_FRect(
+    let destination = SDL_FRect(
       x: Float(rect.left), y: Float(rect.top), w: Float(rect.width), h: Float(rect.height))
 
     guard let member = player.effectiveMember(record, spriteNumber: spriteNumber) else { return }
 
-    let texture: UnsafeMutablePointer<SDL_Texture>?
+    let texture: SDLTexture?
     if let properties = member.chunk.bitmapProperties {
       texture = self.texture(
         for: member, properties: properties, ink: SpriteInk(inkNumber: record.ink),
@@ -63,8 +64,8 @@ final class StageRenderer {
     guard let texture else { return }
     // Blend is per-sprite while textures are shared, so the modulation has
     // to be reapplied on every draw rather than baked into the texture.
-    SDL_SetTextureAlphaMod(texture, UInt8(record.blendPercent * 255 / 100))
-    SDL_RenderTexture(renderer, texture, nil, &destination)
+    try? texture.setAlphaModulation(UInt8(record.blendPercent * 255 / 100))
+    try? renderer.copy(texture, destination: destination)
   }
 
   /// A texture for a text-bearing member (field, text xtra, button) showing
@@ -73,13 +74,13 @@ final class StageRenderer {
   private struct TextEntry {
     var text: String
     var colorIndex: Int
-    var texture: UnsafeMutablePointer<SDL_Texture>?
+    var texture: SDLTexture?
   }
   private var textTextures: [Int: TextEntry] = [:]
 
   private func textTexture(
     for member: CastMember, record: SpriteChannelRecord, rect: SpriteRect
-  ) -> UnsafeMutablePointer<SDL_Texture>? {
+  ) -> SDLTexture? {
     switch member.chunk.type {
     case .field, .button, .richText, .xtra: break
     default: return nil
@@ -94,8 +95,8 @@ final class StageRenderer {
     {
       return cached.texture
     }
-    if let stale = textTextures.removeValue(forKey: key)?.texture {
-      SDL_DestroyTexture(stale)
+    if let _ = textTextures.removeValue(forKey: key)?.texture {
+      // SDLTexture is destroyed on deinit
     }
 
     // The sprite's foreColor is a palette index; junkbot is a Windows-built
@@ -104,17 +105,17 @@ final class StageRenderer {
     guard
       let rgba = TextRasterizer.rgba(
         text: text, width: rect.width, height: rect.height, color: color, fontSize: 12),
-      let texture = SDL_CreateTexture(
-        renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC,
-        Int32(rect.width), Int32(rect.height))
+      let texture = try? SDLTexture(
+        renderer: renderer, format: .init(rawValue: SDL_PIXELFORMAT_RGBA32.rawValue), access: .static,
+        width: rect.width, height: rect.height)
     else {
       textTextures[key] = TextEntry(text: text, colorIndex: record.foreColor, texture: nil)
       return nil
     }
     rgba.withUnsafeBytes { buffer in
-      _ = SDL_UpdateTexture(texture, nil, buffer.baseAddress, Int32(rect.width) * 4)
+      try? texture.update(pixels: UnsafeMutableRawPointer(mutating: buffer.baseAddress!), pitch: rect.width * 4)
     }
-    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND)
+    try? texture.setBlendMode([.alpha])
     textTextures[key] = TextEntry(text: text, colorIndex: record.foreColor, texture: texture)
     return texture
   }
@@ -122,13 +123,13 @@ final class StageRenderer {
   private func texture(
     for member: CastMember, properties: BitmapMemberProperties, ink: SpriteInk,
     backColorIndex: Int
-  ) -> UnsafeMutablePointer<SDL_Texture>? {
+  ) -> SDLTexture? {
     let key =
       (member.libraryNumber << 24) | (member.memberNumber << 10) | (backColorIndex & 0xFF) << 2
       | ink.cacheBits
     if let cached = textures[key] { return cached }
 
-    var result: UnsafeMutablePointer<SDL_Texture>?
+    var result: SDLTexture?
     defer { textures[key] = result }
 
     guard let castId = castChunkId(of: member),
@@ -142,20 +143,20 @@ final class StageRenderer {
         sourcePlanar: decoded.wasCompressed)
     else { return nil }
 
-    let width = Int32(properties.bounds.width)
-    let height = Int32(properties.bounds.height)
+    let width = properties.bounds.width
+    let height = properties.bounds.height
     guard
-      let texture = SDL_CreateTexture(
-        renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, width, height)
+      let texture = try? SDLTexture(
+        renderer: renderer, format: .init(rawValue: SDL_PIXELFORMAT_RGBA32.rawValue), access: .static, width: width, height: height)
     else { return nil }
     rgba.withUnsafeBytes { buffer in
-      _ = SDL_UpdateTexture(texture, nil, buffer.baseAddress, width * 4)
+      try? texture.update(pixels: UnsafeMutableRawPointer(mutating: buffer.baseAddress!), pitch: width * 4)
     }
-    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND)
+    try? texture.setBlendMode([.alpha])
     // Point-scale, not bilinear: this is pixel art, and several sprites are
     // placed at many times their native size (e.g. a 12×15 icon stretched
     // to 136×30), where linear filtering smears into color noise.
-    SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST)
+    try? texture.setScaleMode(.nearest)
     result = texture
     return texture
   }
