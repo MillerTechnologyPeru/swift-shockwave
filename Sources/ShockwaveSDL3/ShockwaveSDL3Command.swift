@@ -57,7 +57,7 @@ struct ShockwaveSDL3Command: AsyncParsableCommand {
     )
     let renderer = try SDLRenderer(window: window)
 
-    let stageRenderer = try StageRenderer(file: file, movie: movie, renderer: renderer)
+    let stageRenderer = StageRenderer(movie: movie, renderer: renderer)
 
     player.start()
 
