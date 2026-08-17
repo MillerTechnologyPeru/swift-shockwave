@@ -22,12 +22,16 @@ enum TextRasterizer {
     height: Int,
     color: PaletteChunk.Color,
     fontName: String? = nil,
-    fontSize: Double
+    fontSize: Double,
+    fixedLineSpace: Int = 0,
+    alignment: String = "left"
   ) -> [UInt8]? {
     guard width > 0, height > 0, !text.isEmpty else { return nil }
     var pixels = [UInt8](repeating: 0, count: width * height * 4)
     let colorSpace = CGColorSpaceCreateDeviceRGB()
     let (font, isEmbedded) = resolveFont(named: fontName, size: fontSize)
+    let framesetter = framesetter(
+      text: text, font: font, color: color, fixedLineSpace: fixedLineSpace, alignment: alignment)
     let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
       guard
         let context = CGContext(
@@ -39,18 +43,6 @@ enum TextRasterizer {
         context.setShouldAntialias(false)
         context.setShouldSmoothFonts(false)
       }
-
-      let attributes: [CFString: Any] = [
-        kCTFontAttributeName: font,
-        kCTForegroundColorAttributeName: CGColor(
-          red: Double(color.red) / 255, green: Double(color.green) / 255,
-          blue: Double(color.blue) / 255, alpha: 1),
-      ]
-      // Director's line separator is \r, which CoreText already treats as a
-      // line break.
-      let attributed = CFAttributedStringCreate(
-        nil, text as CFString, attributes as CFDictionary)!
-      let framesetter = CTFramesetterCreateWithAttributedString(attributed)
       let path = CGPath(
         rect: CGRect(x: 0, y: 0, width: width, height: height), transform: nil)
       let frame = CTFramesetterCreateFrame(
@@ -59,6 +51,60 @@ enum TextRasterizer {
       return true
     }
     return drawn ? pixels : nil
+  }
+
+  /// The height `text` needs when wrapped to `width` — what an
+  /// auto-sizing text member grows to.
+  static func height(
+    text: String, width: Int, fontName: String?, fontSize: Double, fixedLineSpace: Int = 0
+  ) -> Int {
+    guard width > 0, !text.isEmpty else { return 0 }
+    let (font, _) = resolveFont(named: fontName, size: fontSize)
+    let framesetter = framesetter(
+      text: text, font: font, color: PaletteChunk.Color(red: 0, green: 0, blue: 0),
+      fixedLineSpace: fixedLineSpace, alignment: "left")
+    let size = CTFramesetterSuggestFrameSizeWithConstraints(
+      framesetter, CFRange(location: 0, length: 0), nil,
+      CGSize(width: CGFloat(width), height: 100_000), nil)
+    return Int(size.height.rounded(.up))
+  }
+
+  private static func framesetter(
+    text: String, font: CTFont, color: PaletteChunk.Color, fixedLineSpace: Int,
+    alignment: String
+  ) -> CTFramesetter {
+    var textAlignment: CTTextAlignment
+    switch alignment {
+    case "center": textAlignment = .center
+    case "right": textAlignment = .right
+    default: textAlignment = .left
+    }
+    var lineHeight = CGFloat(fixedLineSpace)
+    var settings: [CTParagraphStyleSetting] = [
+      CTParagraphStyleSetting(
+        spec: .alignment, valueSize: MemoryLayout<CTTextAlignment>.size, value: &textAlignment)
+    ]
+    if fixedLineSpace > 0 {
+      // A fixed line pitch pins both bounds of the line height.
+      settings.append(
+        CTParagraphStyleSetting(
+          spec: .minimumLineHeight, valueSize: MemoryLayout<CGFloat>.size, value: &lineHeight))
+      settings.append(
+        CTParagraphStyleSetting(
+          spec: .maximumLineHeight, valueSize: MemoryLayout<CGFloat>.size, value: &lineHeight))
+    }
+    let paragraph = CTParagraphStyleCreate(settings, settings.count)
+    let attributes: [CFString: Any] = [
+      kCTFontAttributeName: font,
+      kCTParagraphStyleAttributeName: paragraph,
+      kCTForegroundColorAttributeName: CGColor(
+        red: Double(color.red) / 255, green: Double(color.green) / 255,
+        blue: Double(color.blue) / 255, alpha: 1),
+    ]
+    // Director's line separator is \r, which CoreText already treats as a
+    // line break.
+    let attributed = CFAttributedStringCreate(nil, text as CFString, attributes as CFDictionary)!
+    return CTFramesetterCreateWithAttributedString(attributed)
   }
 
   /// The CoreText font for a Director font name, and whether that name
