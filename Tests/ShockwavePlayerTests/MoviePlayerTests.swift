@@ -39,11 +39,11 @@ private func realPlayer() throws -> MoviePlayer {
   let byName = try #require(player.member(.string("frameloop"), castLib: nil) as? CastMember)
   #expect(byName.name == "frameloop")
 
-  let byNumber = try #require(player.member(.integer(4), castLib: .integer(2)) as? CastMember)
+  let byNumber = try #require(player.member(.integer(4), castLib: .integer(1)) as? CastMember)
   #expect(byNumber.name == "frameloop")
 
   let byLibName = try #require(
-    player.member(.string("main"), castLib: .string("legoparts")) as? CastMember)
+    player.member(.string("main"), castLib: .string("Internal")) as? CastMember)
   #expect(byLibName.scriptType == .movie)
 }
 
