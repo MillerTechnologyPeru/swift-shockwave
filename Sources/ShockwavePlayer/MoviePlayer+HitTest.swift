@@ -124,6 +124,14 @@ extension MoviePlayer {
       regY = natural.height > 0 ? properties.regY * height / natural.height : properties.regY
     }
 
+    if !record.stretch, let measure = textHeightMeasurer,
+      let member = effectiveMember(record, spriteNumber: spriteNumber), member.isTextMember
+    {
+      // Text grows to its content; the score's height is only where it
+      // started.
+      height = max(height, measure(member, width))
+    }
+
     var locH = record.left
     var locV = record.top
     if let sprite = existingSprite(spriteNumber) {
