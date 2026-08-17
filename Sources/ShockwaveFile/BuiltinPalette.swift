@@ -3,8 +3,12 @@
 /// Vivid, `-6` NTSC, `-7` Metallic, `-8` Web 216, `-9` VGA, `-101`
 /// System-Win, `-102` System-Win (Director 5 variant). All the D4-era
 /// tables are real data verified against the palette resources in the
-/// Director for Windows projector; only the D7-era additions (`-8`
-/// Web 216, `-9` VGA) still fall back to the Mac system palette.
+/// Director for Windows projector, Web 216 against dirplayer-rs; only `-9`
+/// VGA has no table of its own (it resolves to System-Win).
+///
+/// These are LINGO's ids. The file stores each built-in one higher (0 is
+/// System-Mac, -6 Metallic, -7 Web 216, -100 System-Win);
+/// `BitmapMemberProperties` normalizes on parse.
 public enum BuiltinPalette {
   /// The classic Mac 8-bit system palette: a 6-level RGB color cube
   /// (255/204/153/102/51/0, red varying slowest, minus the black entry),
@@ -94,8 +98,9 @@ public enum BuiltinPalette {
     (0, 0, 0),
   ].map { PaletteChunk.Color(red: $0.0, green: $0.1, blue: $0.2) }
 
-  /// Resolves a built-in palette member id to a color table. `-8` (Web 216)
-  /// and any unknown id still fall back to the Mac system palette.
+  /// Resolves a built-in palette member id (Lingo numbering: `-1`
+  /// System-Mac … `-8` Web 216, `-101`/`-102` System-Win) to a color
+  /// table. Unknown ids fall back to the Mac system palette.
   public static func colors(forMember member: Int) -> [PaletteChunk.Color] {
     switch member {
     case -2: return rainbow
@@ -106,6 +111,7 @@ public enum BuiltinPalette {
     case -7: return metallic
     case -101: return systemWin
     case -102: return systemWinD5
+    case -8: return web216
     // VGA has no table of its own; Director-era players resolve it to the
     // Windows system palette rather than the Mac one.
     case -9: return systemWin
