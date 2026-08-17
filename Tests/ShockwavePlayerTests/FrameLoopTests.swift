@@ -75,8 +75,8 @@ private func startedPlayer() throws -> MoviePlayer {
 
   // Find a span carrying the "global button" behavior (legoparts member 8,
   // whose compiled script defines mouseUp) and jump to its frames.
-  let globalButton = ScoreChunk.BehaviorReference(castLib: 1, member: 8)
-  let span = try #require(score.spans.first { $0.behaviors.contains(globalButton) })
+  let span = try #require(
+    score.spans.first { $0.behaviors.contains { $0.castLib == 1 && $0.member == 8 } })
   let spriteNumber = try #require(span.spriteNumber)
   player.jump(to: span.startFrame)
 
