@@ -21,6 +21,13 @@ public final class Movie: LingoObject {
   /// When the movie was loaded — the zero point for `the ticks` and
   /// `the milliseconds`.
   private let loadDate = Date()
+  /// The zero point for `the timer`; `startTimer` resets it.
+  private var timerDate = Date()
+
+  /// `startTimer` — restarts `the timer` from zero.
+  public func startTimer() {
+    timerDate = Date()
+  }
 
   public init(
     castManager: CastManager, score: Score?, fileVersion: Int = 0, frameRate: Int = 0,
@@ -41,6 +48,9 @@ public final class Movie: LingoObject {
     // advancing"), so they have to actually move.
     case "ticks": return .integer(Int(Date().timeIntervalSince(loadDate) * 60))
     case "milliseconds": return .integer(Int(Date().timeIntervalSince(loadDate) * 1000))
+    // `the timer`: ticks since the last `startTimer` (or load). The
+    // sample's message boxes hold on screen for `the timer > shown + 120`.
+    case "timer": return .integer(Int(Date().timeIntervalSince(timerDate) * 60))
     case "lastframe": return .integer(score?.frameCount ?? 0)
     default:
       if let value = dynamicProperties[name.asciiLowercased()] {
