@@ -41,6 +41,11 @@ public final class CastMember: LingoObject {
   /// The typeface a text xtra member is set in (from its `XMED` styling),
   /// or `nil` for members that carry none.
   public let textStyle: XMediaText.Style?
+  /// A text xtra member's own box (from its `XMED` header): the width its
+  /// text wraps to, and its height. Sprites showing it take this size
+  /// unless the score stretches them — the score record's size can be
+  /// stale for text.
+  public let textBox: (width: Int, height: Int)?
   /// A bitmap member's raw `BITD` payload (compressed or not), or `nil`
   /// for members that have none. Decoded on demand by whoever draws or
   /// hit-tests it.
@@ -64,6 +69,7 @@ public final class CastMember: LingoObject {
     scriptUsesCapitalContext: Bool = false,
     authoredText: String? = nil,
     textStyle: XMediaText.Style? = nil,
+    textBox: (width: Int, height: Int)? = nil,
     bitmapData: Data? = nil,
     filmLoopScore: ScoreChunk? = nil,
     soundData: Data? = nil,
@@ -79,6 +85,7 @@ public final class CastMember: LingoObject {
     self.scriptUsesCapitalContext = scriptUsesCapitalContext
     self.authoredText = authoredText
     self.textStyle = textStyle
+    self.textBox = textBox
     self.bitmapData = bitmapData
     self.filmLoopScore = filmLoopScore
     self.soundData = soundData
