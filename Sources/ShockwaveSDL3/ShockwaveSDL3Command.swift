@@ -45,7 +45,7 @@ struct ShockwaveSDL3Command: AsyncParsableCommand {
     let stage = config?.stageRect ?? DirectorRect(top: 0, left: 0, bottom: 480, right: 640)
     let player = MoviePlayer(movie: movie)
 
-    try SDL.initialize(subSystems: [.video])
+    try SDL.initialize(subSystems: [.video, .audio])
     defer { SDL.quit() }
 
     let title = URL(fileURLWithPath: moviePath).lastPathComponent
@@ -62,6 +62,11 @@ struct ShockwaveSDL3Command: AsyncParsableCommand {
     player.textCoverage = { member, width, height in
       StageRenderer.textCoverage(of: member, width: width, height: height)
     }
+    // No audio in headless runs; otherwise silent when no device opens.
+    let audio = screenshot == nil ? SDLAudioSink() : nil
+    player.audioSink = audio
+    player.compressedSoundDecoder = { media in MP3Decoder.decode(media) }
+    defer { audio?.close() }
 
     player.start()
 
