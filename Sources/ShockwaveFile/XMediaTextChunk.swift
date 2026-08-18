@@ -215,6 +215,33 @@ public enum XMediaText {
     return records
   }
 
+  /// The text member's own box: the width it wraps to and its height, from
+  /// the document header — what a text sprite is sized from when the score
+  /// record's size isn't authoritative (the sample's end-of-level messages
+  /// sit in 23px score records that Director ignores in favor of the
+  /// member's 300px box).
+  public static func boxSize(from data: Data) -> (width: Int, height: Int)? {
+    guard let sections = sections(of: [UInt8](data)),
+      let header = sections.first(where: { $0.key == 0x0000 })
+    else { return nil }
+    var packer = Packer(bytes: header.body)
+    let version = packer.next()
+    // Only the Director 7-era layout (document version 0x40001) is known:
+    // the box height sits at slot 10 and again at slot 28, the width right
+    // after it at 29, ahead of the color triples. Other versions answer
+    // nothing rather than a guess.
+    guard version >= 0x40000, version < 0x50000 else { return nil }
+    packer.skip(9)
+    let height = packer.next()
+    packer.skip(17)
+    let heightAgain = packer.next()
+    let width = packer.next()
+    guard heightAgain == height, width > 0, width < 10000, height >= 0, height < 10000 else {
+      return nil
+    }
+    return (width, height)
+  }
+
   private struct StyleRecord {
     var fontIndex: Int
     var fontSize: Int
