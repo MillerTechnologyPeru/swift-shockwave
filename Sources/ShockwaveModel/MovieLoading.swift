@@ -112,6 +112,7 @@ extension Movie {
       let scriptChunk = try loadScriptChunk(for: chunk, sectionMap: sectionMap, file: file)
       var authoredText: String?
       var textStyle: XMediaText.Style?
+      var textBox: (width: Int, height: Int)?
       if let textId = textChunkIds[memberId] {
         authoredText = try? file.textChunk(at: file.chunkMap[textId]).text
       } else if let mediaId = mediaChunkIds[memberId],
@@ -119,6 +120,7 @@ extension Movie {
       {
         authoredText = XMediaText.text(from: data)
         textStyle = XMediaText.style(from: data)
+        textBox = XMediaText.boxSize(from: data)
       }
       var bitmapData: Data?
       if chunk.type == .bitmap, let bitmapId = bitmapChunkIds[memberId] {
@@ -145,7 +147,8 @@ extension Movie {
         libraryNumber: libraryNumber, memberNumber: memberNumber, chunkId: memberId, chunk: chunk,
         scriptChunk: scriptChunk, scriptNames: scriptNames,
         scriptUsesCapitalContext: capitalContext, authoredText: authoredText,
-        textStyle: textStyle, bitmapData: bitmapData, filmLoopScore: filmLoopScore,
+        textStyle: textStyle, textBox: textBox, bitmapData: bitmapData,
+        filmLoopScore: filmLoopScore,
         soundData: soundData, shockwaveAudio: shockwaveAudio, environment: environment)
     }
     return members
