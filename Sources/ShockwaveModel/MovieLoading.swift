@@ -85,6 +85,7 @@ extension Movie {
     var mediaChunkIds: [Int: Int] = [:]
     var bitmapChunkIds: [Int: Int] = [:]
     var filmLoopScoreIds: [Int: Int] = [:]
+    var soundChunkIds: [Int: Int] = [:]
     for relationship in keyTable?.entries ?? [] {
       guard relationship.childChunkIndex < file.chunkMap.count else { continue }
       if relationship.fourCC == "STXT" {
@@ -93,6 +94,10 @@ extension Movie {
         mediaChunkIds[relationship.ownerChunkIndex] = relationship.childChunkIndex
       } else if relationship.fourCC == "BITD" {
         bitmapChunkIds[relationship.ownerChunkIndex] = relationship.childChunkIndex
+      } else if relationship.fourCC == "snd " {
+        soundChunkIds[relationship.ownerChunkIndex] = relationship.childChunkIndex
+      } else if relationship.fourCC == "ediM" {
+        mediaChunkIds[relationship.ownerChunkIndex] = relationship.childChunkIndex
       } else if relationship.fourCC == "SCVW" || relationship.fourCC == "VWSC" {
         // A film loop's frames: a score chunk owned by the member.
         filmLoopScoreIds[relationship.ownerChunkIndex] = relationship.childChunkIndex
@@ -123,12 +128,25 @@ extension Movie {
       if chunk.type == .filmLoop, let scoreId = filmLoopScoreIds[memberId] {
         filmLoopScore = try? file.score(at: file.chunkMap[scoreId])
       }
+      var soundData: Data?
+      var shockwaveAudio: ShockwaveAudioMedia?
+      if chunk.type == .sound {
+        if let soundId = soundChunkIds[memberId],
+          let data = try? file.chunkData(at: file.chunkMap[soundId]), !data.isEmpty
+        {
+          soundData = data
+        } else if let mediaId = mediaChunkIds[memberId],
+          let data = try? file.chunkData(at: file.chunkMap[mediaId])
+        {
+          shockwaveAudio = ShockwaveAudioMedia(ediMData: data)
+        }
+      }
       members[memberNumber] = CastMember(
         libraryNumber: libraryNumber, memberNumber: memberNumber, chunkId: memberId, chunk: chunk,
         scriptChunk: scriptChunk, scriptNames: scriptNames,
         scriptUsesCapitalContext: capitalContext, authoredText: authoredText,
         textStyle: textStyle, bitmapData: bitmapData, filmLoopScore: filmLoopScore,
-        environment: environment)
+        soundData: soundData, shockwaveAudio: shockwaveAudio, environment: environment)
     }
     return members
   }
