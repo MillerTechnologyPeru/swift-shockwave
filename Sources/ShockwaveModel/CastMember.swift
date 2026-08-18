@@ -48,6 +48,11 @@ public final class CastMember: LingoObject {
   /// A film loop member's own score — the frames it plays — or `nil` for
   /// every other member type (and for a loop whose score didn't parse).
   public let filmLoopScore: ScoreChunk?
+  /// A sound member's raw `snd ` resource, or `nil` for every other type.
+  public let soundData: Data?
+  /// A compressed (Shockwave Audio) sound member's media, or `nil`.
+  public let shockwaveAudio: ShockwaveAudioMedia?
+  private var decodedSound: SoundResource??
 
   public init(
     libraryNumber: Int,
@@ -61,6 +66,8 @@ public final class CastMember: LingoObject {
     textStyle: XMediaText.Style? = nil,
     bitmapData: Data? = nil,
     filmLoopScore: ScoreChunk? = nil,
+    soundData: Data? = nil,
+    shockwaveAudio: ShockwaveAudioMedia? = nil,
     environment: LingoEnvironment
   ) {
     self.libraryNumber = libraryNumber
@@ -74,6 +81,8 @@ public final class CastMember: LingoObject {
     self.textStyle = textStyle
     self.bitmapData = bitmapData
     self.filmLoopScore = filmLoopScore
+    self.soundData = soundData
+    self.shockwaveAudio = shockwaveAudio
     super.init(environment: environment)
   }
 
@@ -105,6 +114,23 @@ public final class CastMember: LingoObject {
       dynamicProperties["alignment"]?.asString().lowercased() ?? textStyle?.alignment ?? "left"
     return TextLayout(
       fontName: fontName, fontSize: fontSize, fixedLineSpace: spacing, alignment: alignment)
+  }
+
+  /// A sound member's decoded samples, or `nil` when it has none or they
+  /// aren't plain PCM (compressed members decode through the player's
+  /// `compressedSoundDecoder`, and land in `decodedSound` from there).
+  /// Decoded once, on first use.
+  public var sound: SoundResource? {
+    if let decodedSound { return decodedSound }
+    let decoded = soundData.flatMap { SoundResource(sndResource: $0) }
+    decodedSound = .some(decoded)
+    return decoded
+  }
+
+  /// Installs samples decoded elsewhere (a compressed member's MP3
+  /// bitstream) as this member's sound.
+  public func setDecodedSound(_ sound: SoundResource?) {
+    decodedSound = .some(sound)
   }
 
   /// The member's bitmap composited under `ink` with `backColor` as the
@@ -161,6 +187,12 @@ public final class CastMember: LingoObject {
       // content; a member with neither answers empty string, as Lingo does.
       if let value = dynamicProperties["text"] { return value }
       return .string(authoredText ?? "")
+    case "duration":
+      // A sound's playing time in milliseconds; the sample's music code
+      // queues clips as `[#member: m, #startTime: 0, #endTime: m.duration]`.
+      if let sound { return .integer(sound.durationMilliseconds) }
+      if let shockwaveAudio { return .integer(shockwaveAudio.durationMilliseconds) }
+      return super.getProperty(name)
     case "font":
       if let value = dynamicProperties["font"] { return value }
       return textStyle.map { .string($0.fontName) } ?? super.getProperty(name)
