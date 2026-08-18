@@ -1,6 +1,7 @@
 import LingoBytecode
 import LingoRuntime
 import LingoVM
+import ShockwaveFile
 import ShockwaveModel
 
 /// The `LingoVMHost` conformance bridging a loaded `Movie` into `LingoVM`:
@@ -36,6 +37,23 @@ public final class MoviePlayer: LingoVMHost {
   /// the loop's frame to show is this modulo its length. Advanced once
   /// per movie frame; a loop plays continuously while its sprite is up.
   var filmLoopFrames: [Int: Int] = [:]
+  /// Director's sound channels, created as Lingo asks for them.
+  var soundChannels: [Int: SoundChannel] = [:]
+  /// The audio backend; `nil` plays nothing (headless runs, tests).
+  public var audioSink: AudioSink?
+  /// Decodes a compressed (Shockwave Audio, MP3) sound member's bitstream
+  /// to PCM. Supplied by the platform layer; without it those members are
+  /// silent. Results are cached on the member.
+  public var compressedSoundDecoder: ((ShockwaveAudioMedia) -> SoundResource?)?
+
+  /// A sound member's samples, decoding compressed members on first use.
+  func decodedSound(of member: CastMember) -> SoundResource? {
+    if let sound = member.sound { return sound }
+    guard let media = member.shockwaveAudio, let decoder = compressedSoundDecoder else { return nil }
+    let sound = decoder(media)
+    member.setDecodedSound(sound)
+    return sound
+  }
   /// Measures how tall a text member's content is at a given width, so an
   /// auto-sizing text sprite (`boxType #adjust`) can grow past the height
   /// the score recorded for it — the memo on the levels screen was
@@ -129,6 +147,18 @@ public final class MoviePlayer: LingoVMHost {
 
   public func castLibrary(_ id: LingoValue) -> LingoObject? {
     resolveLibrary(id)
+  }
+
+  /// `sound(n)` — one of the eight sound channels.
+  public func sound(_ id: LingoValue) -> LingoObject? {
+    soundChannel(id.asInteger() ?? 1)
+  }
+
+  func soundChannel(_ number: Int) -> SoundChannel {
+    if let channel = soundChannels[number] { return channel }
+    let channel = SoundChannel(number: number, player: self)
+    soundChannels[number] = channel
+    return channel
   }
 
   public func member(_ id: LingoValue, castLib: LingoValue?) -> LingoObject? {
@@ -241,6 +271,16 @@ public final class MoviePlayer: LingoVMHost {
       else { return .void }
       return .object(member)
     }
+    environment.registerGlobalFunction("sound") { [weak self] args in
+      guard let self, let id = args.first else { return .void }
+      return .object(self.soundChannel(id.asInteger() ?? 1))
+    }
+    // `random(n)` — 1…n. Registered here rather than in the runtime so a
+    // movie's own `random` handler could still win by name.
+    environment.registerGlobalFunction("random") { args in
+      guard let upper = args.first?.asInteger(), upper >= 1 else { return .integer(1) }
+      return .integer(Int.random(in: 1...upper))
+    }
     // `new(script("name"))` compiles to two chained ExtCalls, not NewObj:
     // `script` resolves the member, `new` instantiates it.
     environment.registerGlobalFunction("script") { [weak self] args in
@@ -293,6 +333,31 @@ public final class MoviePlayer: LingoVMHost {
         break
       }
       return .void
+    }
+    // `puppetSound(channel, member)`, `puppetSound(member)` (channel 1),
+    // `puppetSound(channel, 0)` / `puppetSound(0)` to stop.
+    environment.registerGlobalFunction("puppetSound") { [weak self] args in
+      guard let self else { return .void }
+      let channelNumber: Int
+      let target: LingoValue
+      if args.count >= 2 {
+        channelNumber = args[0].asInteger() ?? 1
+        target = args[1]
+      } else {
+        channelNumber = 1
+        target = args.first ?? .void
+      }
+      let channel = self.soundChannel(channelNumber)
+      if target.asInteger() == 0 {
+        channel.stop()
+      } else if let member = self.member(target, castLib: nil) as? CastMember {
+        channel.play(member: member)
+      }
+      return .void
+    }
+    environment.registerGlobalFunction("soundBusy") { [weak self] args in
+      guard let self, let number = args.first?.asInteger() else { return .integer(0) }
+      return .integer(self.soundChannel(number).isBusy ? 1 : 0)
     }
     environment.registerGlobalFunction("sendAllSprites") { [weak self] args in
       guard let self, let event = args.first else { return .void }
