@@ -271,6 +271,10 @@ public final class MoviePlayer: LingoVMHost {
       else { return .void }
       return .object(member)
     }
+    environment.registerGlobalFunction("startTimer") { [weak self] _ in
+      self?.movieModel.startTimer()
+      return .void
+    }
     environment.registerGlobalFunction("sound") { [weak self] args in
       guard let self, let id = args.first else { return .void }
       return .object(self.soundChannel(id.asInteger() ?? 1))
