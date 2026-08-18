@@ -134,12 +134,19 @@ extension MoviePlayer {
       regY = height / 2
     }
 
-    if !record.stretch, let measure = textHeightMeasurer,
-      let member = effectiveMember(record, spriteNumber: spriteNumber), member.isTextMember
+    if !record.stretch, let member = effectiveMember(record, spriteNumber: spriteNumber),
+      member.isTextMember
     {
-      // Text grows to its content; the score's height is only where it
-      // started.
-      height = max(height, measure(member, width))
+      // A text member's own box says how wide it wraps; the score record
+      // can be stale for text (the level-end messages sit in 23px records
+      // over 300px members). Height then grows to the content.
+      if let box = member.textBox {
+        width = box.width
+        height = box.height
+      }
+      if let measure = textHeightMeasurer {
+        height = max(height, measure(member, width))
+      }
     }
 
     var locH = record.left
