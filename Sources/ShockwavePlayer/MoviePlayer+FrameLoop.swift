@@ -22,6 +22,7 @@ extension MoviePlayer {
   public func step() {
     guard isPlaying, currentFrame > 0 else { return }
     advanceFilmLoops()
+    for channel in soundChannels.values { channel.service() }
     dispatchMouseWithin()
     dispatchFrameEvent("exitFrame")
     let target = nextFrame ?? (currentFrame + 1)
