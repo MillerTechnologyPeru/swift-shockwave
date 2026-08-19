@@ -31,10 +31,35 @@ public struct ShockwaveAudioMedia: Equatable, Sendable {
     guard durationMilliseconds > 0 else { return nil }
   }
 
+  /// A sound member whose `snd ` resource holds a Shockwave Audio stream
+  /// instead of samples — how a burned (`.dcr`) movie stores its sounds:
+  /// the Macintosh header survives, but what follows it is MP3.
+  ///
+  /// `nil` for an ordinary PCM resource: the sample area has to start with
+  /// a run of MPEG frames that tiles it, which random samples don't.
+  public init?(sndResource data: Data) {
+    guard let layout = SoundResource.layout(ofSndResource: data),
+      layout.dataOffset < data.count
+    else { return nil }
+    let stream = data.subdata(in: layout.dataOffset..<data.count)
+    let (duration, consumed, frames) = Self.walk(stream)
+    // The frames must account for essentially the whole sample area.
+    guard frames > 0, duration > 0, consumed * 10 >= stream.count * 9 else { return nil }
+    sampleRate = layout.sampleRate
+    bitstream = stream
+    durationMilliseconds = duration
+  }
+
   /// Total playing time of an MPEG-1/2/2.5 layer I–III bitstream, by
   /// stepping frame to frame. Anything that isn't a frame sync (a stray
   /// tag, padding) is skipped a byte at a time.
   static func duration(of bitstream: Data) -> Int {
+    walk(bitstream).duration
+  }
+
+  /// Steps frame to frame, reporting the playing time, how many bytes the
+  /// frames covered, and how many there were.
+  private static func walk(_ bitstream: Data) -> (duration: Int, consumed: Int, frames: Int) {
     let bytes = [UInt8](bitstream)
     let bitrateTable: [[Int]] = [
       // MPEG-1 layer III
@@ -48,6 +73,8 @@ public struct ShockwaveAudioMedia: Equatable, Sendable {
       [11025, 12000, 8000, 0],  // MPEG-2.5
     ]
     var samples = 0.0
+    var consumed = 0
+    var frames = 0
     var index = 0
     while index + 4 <= bytes.count {
       guard bytes[index] == 0xFF, bytes[index + 1] & 0xE0 == 0xE0 else {
@@ -76,8 +103,10 @@ public struct ShockwaveAudioMedia: Equatable, Sendable {
         continue
       }
       samples += samplesPerFrame * 1000 / Double(sampleRate)
+      consumed += frameLength
+      frames += 1
       index += frameLength
     }
-    return Int(samples.rounded())
+    return (Int(samples.rounded()), consumed, frames)
   }
 }
