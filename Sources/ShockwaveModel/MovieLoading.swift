@@ -136,7 +136,13 @@ extension Movie {
         if let soundId = soundChunkIds[memberId],
           let data = try? file.chunkData(at: file.chunkMap[soundId]), !data.isEmpty
         {
-          soundData = data
+          // A burned movie's sounds keep their `snd ` wrapper but hold a
+          // Shockwave Audio stream where the samples were.
+          if let media = ShockwaveAudioMedia(sndResource: data) {
+            shockwaveAudio = media
+          } else {
+            soundData = data
+          }
         } else if let mediaId = mediaChunkIds[memberId],
           let data = try? file.chunkData(at: file.chunkMap[mediaId])
         {
