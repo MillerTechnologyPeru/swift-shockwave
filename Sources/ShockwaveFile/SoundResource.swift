@@ -31,7 +31,20 @@ public struct SoundResource: Equatable, Sendable {
     self.samples = samples
   }
 
-  public init?(sndResource data: Data) {
+  /// Where a `snd ` resource's samples begin and how they are shaped.
+  /// Split out so a resource whose "samples" are really a compressed
+  /// stream (a burned movie's Shockwave Audio) can be recognized without
+  /// decoding it as PCM.
+  public struct Layout: Equatable, Sendable {
+    public var sampleRate: Int
+    public var channels: Int
+    public var bitsPerSample: Int
+    public var frameCount: Int
+    /// Offset of the first sample byte within the resource.
+    public var dataOffset: Int
+  }
+
+  public static func layout(ofSndResource data: Data) -> Layout? {
     let bytes = [UInt8](data)
     func u16(_ offset: Int) -> Int? {
       offset + 2 <= bytes.count ? Int(bytes[offset]) << 8 | Int(bytes[offset + 1]) : nil
@@ -75,10 +88,11 @@ public struct SoundResource: Equatable, Sendable {
       return nil
     }
     let encode = bytes[header + 20]
-    sampleRate = rateFixed >> 16
+    let sampleRate = rateFixed >> 16
     let dataStart: Int
     let frames: Int
     let bits: Int
+    let channels: Int
     switch encode {
     case 0x00:
       // Standard header: 8-bit mono, `length` bytes of data right after.
@@ -109,8 +123,25 @@ public struct SoundResource: Equatable, Sendable {
     default:
       return nil
     }
-    guard sampleRate > 0, channels > 0, frames >= 0, bits == 8 || bits == 16 else { return nil }
-    let sampleCount = min(frames * channels, (bytes.count - dataStart) / (bits / 8))
+    guard sampleRate > 0, channels > 0, frames >= 0, bits == 8 || bits == 16,
+      dataStart <= bytes.count
+    else { return nil }
+    return Layout(
+      sampleRate: sampleRate, channels: channels, bitsPerSample: bits, frameCount: frames,
+      dataOffset: dataStart)
+  }
+
+  /// Decodes a `snd ` resource's PCM samples. `nil` when the resource
+  /// isn't one, or holds something other than plain samples.
+  public init?(sndResource data: Data) {
+    guard let layout = Self.layout(ofSndResource: data) else { return nil }
+    let bytes = [UInt8](data)
+    sampleRate = layout.sampleRate
+    channels = layout.channels
+    let bits = layout.bitsPerSample
+    let dataStart = layout.dataOffset
+    let sampleCount = min(
+      layout.frameCount * layout.channels, (bytes.count - dataStart) / (bits / 8))
     guard sampleCount >= 0 else { return nil }
     var samples = [Int16](repeating: 0, count: sampleCount)
     if bits == 8 {
