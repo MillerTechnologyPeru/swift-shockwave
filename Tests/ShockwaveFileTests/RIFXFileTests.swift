@@ -479,9 +479,12 @@ private func realMovieData() throws -> Data {
 
 @Test func realShockwaveMovieIsDetectedAsCompressed() throws {
   let data = try Data(contentsOf: TestResources.junkbotShockwaveURL)
-  #expect(throws: ShockwaveFileError.compressedContainerUnsupported) {
-    try RIFXFile.read(from: data)
-  }
+  let file = try RIFXFile.read(from: data)
+  #expect(file.header.isAfterburner)
+  #expect(file.header.formatCode == "FGDM")
+  // Read back as ordinary chunks — see `AfterburnerTests` for the
+  // comparison against the movie this was burned from.
+  #expect(file.entries(fourCC: "CASt").count == 1400)
 }
 
 @Test func scriptContextBridgesToLingoBytecode() throws {
