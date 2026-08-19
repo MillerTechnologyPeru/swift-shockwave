@@ -5,15 +5,14 @@ import LingoBytecode
 /// A parsed RIFX container: the top-level header plus the flat chunk table
 /// resolved by walking `imap` → `mmap`.
 ///
-/// This covers the classic, uncompressed RIFX container used by `.dir`
-/// (editable movie), `.cst` (external cast), and `.dxr`/`.cxt` (the same
-/// formats with a "protected"/locked-from-editing flag set, but still plain
-/// RIFX). It does not cover `.dcr`/`.cct` (Shockwave-for-web movie/cast),
-/// which wrap an Afterburner-compressed envelope (`Fver`/`Fcdr`/`ABMP`/`FGEI`)
-/// around a custom bitstream instead of RIFX — `RIFXHeader.init(parsing:)`
-/// detects that envelope's `Fver` magic and throws
-/// `ShockwaveFileError.compressedContainerUnsupported` rather than
-/// misparsing it.
+/// Covers both shapes a Director file comes in. The classic, uncompressed
+/// RIFX container of `.dir` (editable movie), `.cst` (external cast) and
+/// `.dxr`/`.cxt` (the same, flagged as locked from editing) is read
+/// directly. `.dcr`/`.cct` (Shockwave-for-web) wrap the same chunks in an
+/// Afterburner envelope — compressed, and addressed by a map rather than
+/// `imap`/`mmap`; those are decompressed on load (see
+/// `AfterburnerArchive`), leaving `data` a plain chunk buffer either way,
+/// so nothing above this type has to care which it read.
 public struct RIFXFile: Sendable {
   public var header: RIFXHeader
   public var chunkMap: [ChunkMapEntry]
@@ -28,6 +27,9 @@ public struct RIFXFile: Sendable {
   public static func read(from data: Data) throws -> RIFXFile {
     let header = try data.withParserSpan { (span: inout ParserSpan) throws -> RIFXHeader in
       try RIFXHeader(parsing: &span)
+    }
+    if header.isAfterburner {
+      return try AfterburnerArchive.read(data, header: header)
     }
 
     let inputMap = try data.withParserSpan { (span: inout ParserSpan) throws -> InputMapChunk in
