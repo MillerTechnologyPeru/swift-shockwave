@@ -58,9 +58,11 @@ struct ShockwaveSDL3Command: AsyncParsableCommand {
     let renderer = try SDLRenderer(window: window)
 
     let stageRenderer = StageRenderer(movie: movie, renderer: renderer)
-    player.textHeightMeasurer = { member, width in StageRenderer.textHeight(of: member, width: width) }
+    player.textHeightMeasurer = { member, width in
+      StageRenderer.textHeight(of: member, width: width, movie: movie)
+    }
     player.textCoverage = { member, width, height in
-      StageRenderer.textCoverage(of: member, width: width, height: height)
+      StageRenderer.textCoverage(of: member, width: width, height: height, movie: movie)
     }
     // No audio in headless runs; otherwise silent when no device opens.
     let audio = screenshot == nil ? SDLAudioSink() : nil
