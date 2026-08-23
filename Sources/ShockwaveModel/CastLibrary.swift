@@ -45,6 +45,9 @@ public final class CastLibrary: LingoObject {
     case "filename", "pathname": return .string(filePath)
     case "preloadmode": return .integer(preloadMode)
     case "membercount": return .integer(memberCount)
+    // `the number of members of castLib X` counts slots up to the highest
+    // occupied one, as Director does — an empty slot still has a number.
+    case "number of members", "number", "count": return .integer(maxMember)
     case "minmember": return .integer(minMember)
     case "maxmember": return .integer(maxMember)
     default: return super.getProperty(name)

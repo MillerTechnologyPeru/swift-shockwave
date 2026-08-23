@@ -35,9 +35,10 @@ struct ListItems {
 
 extension ListItems {
   /// Decodes an item holding a Pascal string (length byte + bytes); empty
-  /// items decode as `nil`.
+  /// items, and items whose length byte is zero (a member with no name —
+  /// common in burned Shockwave movies), decode as `nil`.
   static func pascalString(_ item: [UInt8]) -> String? {
-    guard let length = item.first, item.count >= 1 + Int(length) else { return nil }
-    return String(decoding: item[1...Int(length)], as: UTF8.self)
+    guard let length = item.first, length > 0, item.count >= 1 + Int(length) else { return nil }
+    return String(decoding: item[1..<(1 + Int(length))], as: UTF8.self)
   }
 }

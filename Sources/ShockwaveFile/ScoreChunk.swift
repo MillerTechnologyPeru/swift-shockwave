@@ -27,13 +27,21 @@ public struct ScoreChunk: Sendable {
   /// A behavior attachment: `(castLib, member)` of a script cast member.
   /// `castLib` uses the file-internal library numbering
   /// (`CastListEntry.resourceId >> 16`).
+  ///
+  /// `initializer` is the parameter list the author filled in through the
+  /// behavior's `getPropertyDescriptionList` dialog, stored as the source
+  /// text of a Lingo property list (`[#mylocz: 5]`), or `nil` when the
+  /// behavior takes no parameters. Applied to the instance's properties
+  /// before `beginSprite`.
   public struct BehaviorReference: Equatable, Sendable {
     public var castLib: Int
     public var member: Int
+    public var initializer: String?
 
-    public init(castLib: Int, member: Int) {
+    public init(castLib: Int, member: Int, initializer: String? = nil) {
       self.castLib = castLib
       self.member = member
+      self.initializer = initializer
     }
   }
 
@@ -110,24 +118,41 @@ public struct ScoreChunk: Sendable {
     (version, channelRecordSize, channelCount, displayedChannelCount, frames) =
       try Self.readFrames([UInt8](framesData))
 
+    // Sprite spans and their behaviors. A film loop's score (the `SCVW`
+    // chunk a film loop member owns) carries frames in the same layout but
+    // its interval table doesn't always follow the movie score's shape;
+    // a film loop has no behaviors to attach anyway, so an interval table
+    // that won't parse is left empty rather than failing the score.
     var intervals: [BehaviorInterval] = []
-    if entryCount > 1 {
-      let index = [UInt8](try entry(1))
+    if entryCount > 1, let index = try? [UInt8](entry(1)) {
       let indexCount = index.count >= 4 ? Int(readU32(index, 0)) : 0
       intervals.reserveCapacity(indexCount)
       for i in 0..<indexCount {
+        guard 4 + i * 4 + 4 <= index.count else { break }
         let primaryEntry = Int(readU32(index, 4 + i * 4))
-        let primary = [UInt8](try entry(primaryEntry))
-        guard primary.count >= 20 else {
-          throw ShockwaveFileError.invalidOffset(primaryEntry)
+        guard let primary = try? [UInt8](entry(primaryEntry)), primary.count >= 20,
+          let secondary = try? [UInt8](entry(primaryEntry + 1))
+        else {
+          intervals = []
+          break
         }
-        let secondary = [UInt8](try entry(primaryEntry + 1))
         var behaviors: [BehaviorReference] = []
         behaviors.reserveCapacity(secondary.count / 8)
         for j in stride(from: 0, to: secondary.count - 7, by: 8) {
+          // Each record is castLib, member, then the entry index of the
+          // parameter list (0 when there is none).
+          let initializerEntry = Int(readU32(secondary, j + 4))
+          var initializer: String?
+          if initializerEntry > 0, initializerEntry < entryCount,
+            let raw = try? entry(initializerEntry)
+          {
+            let text = String(decoding: raw.prefix(while: { $0 != 0 }), as: UTF8.self)
+            if text.hasPrefix("[") { initializer = text }
+          }
           behaviors.append(
             BehaviorReference(
-              castLib: Int(readU16(secondary, j)), member: Int(readU16(secondary, j + 2))))
+              castLib: Int(readU16(secondary, j)), member: Int(readU16(secondary, j + 2)),
+              initializer: initializer))
         }
         intervals.append(
           BehaviorInterval(
@@ -157,7 +182,9 @@ public struct ScoreChunk: Sendable {
     let recordSize = Int(readU16(data, 14))
     let channels = Int(readU16(data, 16))
     let displayed = Int(readU16(data, 18))
-    guard actualLength == data.count, headerSize >= 20, recordSize > 0 else {
+    // Film loop scores pad the frames entry to an even length past what
+    // it declares, so the declared length only has to fit.
+    guard actualLength <= data.count, headerSize >= 20, recordSize > 0 else {
       throw ShockwaveFileError.invalidOffset(actualLength)
     }
 

@@ -1,3 +1,4 @@
+import Foundation
 import LingoBytecode
 import LingoRuntime
 import ShockwaveFile
@@ -30,11 +31,13 @@ extension Movie {
       score = Score(chunk: scoreChunk, labels: labels)
     }
 
-    let fileVersion = try file.movieConfig()?.fileVersion ?? 0
+    let config = try file.movieConfig()
+    let fileVersion = config?.fileVersion ?? 0
+    let frameRate = config?.frameRate ?? 0
 
     return Movie(
       castManager: CastManager(libraries: libraries), score: score, fileVersion: fileVersion,
-      environment: environment)
+      frameRate: frameRate, environment: environment)
   }
 
   /// Joins a cast library's members to their compiled scripts: `CAS*` gives
@@ -74,16 +77,85 @@ extension Movie {
       }
     }
 
+    // Text hangs off the member's own `CASt` chunk in the key table, the
+    // same owned-by relationship bitmaps use for `BITD`: fields carry an
+    // `STXT`, text xtras (rich text — junkbot's level definitions and
+    // runtime messages) carry an `XMED`.
+    var textChunkIds: [Int: Int] = [:]
+    var mediaChunkIds: [Int: Int] = [:]
+    var bitmapChunkIds: [Int: Int] = [:]
+    var filmLoopScoreIds: [Int: Int] = [:]
+    var soundChunkIds: [Int: Int] = [:]
+    for relationship in keyTable?.entries ?? [] {
+      guard relationship.childChunkIndex < file.chunkMap.count else { continue }
+      if relationship.fourCC == "STXT" {
+        textChunkIds[relationship.ownerChunkIndex] = relationship.childChunkIndex
+      } else if relationship.fourCC == "XMED" {
+        mediaChunkIds[relationship.ownerChunkIndex] = relationship.childChunkIndex
+      } else if relationship.fourCC == "BITD" {
+        bitmapChunkIds[relationship.ownerChunkIndex] = relationship.childChunkIndex
+      } else if relationship.fourCC == "snd " {
+        soundChunkIds[relationship.ownerChunkIndex] = relationship.childChunkIndex
+      } else if relationship.fourCC == "ediM" {
+        mediaChunkIds[relationship.ownerChunkIndex] = relationship.childChunkIndex
+      } else if relationship.fourCC == "SCVW" || relationship.fourCC == "VWSC" {
+        // A film loop's frames: a score chunk owned by the member.
+        filmLoopScoreIds[relationship.ownerChunkIndex] = relationship.childChunkIndex
+      }
+    }
+
     let firstMemberNumber = entry.minMember ?? 1
     var members: [Int: CastMember] = [:]
     for (offset, memberId) in castTable.memberIds.enumerated() where memberId != 0 {
       let memberNumber = firstMemberNumber + offset
       let chunk = try file.castMember(at: file.chunkMap[memberId])
       let scriptChunk = try loadScriptChunk(for: chunk, sectionMap: sectionMap, file: file)
+      var authoredText: String?
+      var textStyle: XMediaText.Style?
+      var textBox: (width: Int, height: Int)?
+      if let textId = textChunkIds[memberId] {
+        authoredText = try? file.textChunk(at: file.chunkMap[textId]).text
+      } else if let mediaId = mediaChunkIds[memberId],
+        let data = try? file.chunkData(at: file.chunkMap[mediaId])
+      {
+        authoredText = XMediaText.text(from: data)
+        textStyle = XMediaText.style(from: data)
+        textBox = XMediaText.boxSize(from: data)
+      }
+      var bitmapData: Data?
+      if chunk.type == .bitmap, let bitmapId = bitmapChunkIds[memberId] {
+        bitmapData = try? file.chunkData(at: file.chunkMap[bitmapId])
+      }
+      var filmLoopScore: ScoreChunk?
+      if chunk.type == .filmLoop, let scoreId = filmLoopScoreIds[memberId] {
+        filmLoopScore = try? file.score(at: file.chunkMap[scoreId])
+      }
+      var soundData: Data?
+      var shockwaveAudio: ShockwaveAudioMedia?
+      if chunk.type == .sound {
+        if let soundId = soundChunkIds[memberId],
+          let data = try? file.chunkData(at: file.chunkMap[soundId]), !data.isEmpty
+        {
+          // A burned movie's sounds keep their `snd ` wrapper but hold a
+          // Shockwave Audio stream where the samples were.
+          if let media = ShockwaveAudioMedia(sndResource: data) {
+            shockwaveAudio = media
+          } else {
+            soundData = data
+          }
+        } else if let mediaId = mediaChunkIds[memberId],
+          let data = try? file.chunkData(at: file.chunkMap[mediaId])
+        {
+          shockwaveAudio = ShockwaveAudioMedia(ediMData: data)
+        }
+      }
       members[memberNumber] = CastMember(
-        libraryNumber: libraryNumber, memberNumber: memberNumber, chunk: chunk,
+        libraryNumber: libraryNumber, memberNumber: memberNumber, chunkId: memberId, chunk: chunk,
         scriptChunk: scriptChunk, scriptNames: scriptNames,
-        scriptUsesCapitalContext: capitalContext, environment: environment)
+        scriptUsesCapitalContext: capitalContext, authoredText: authoredText,
+        textStyle: textStyle, textBox: textBox, bitmapData: bitmapData,
+        filmLoopScore: filmLoopScore,
+        soundData: soundData, shockwaveAudio: shockwaveAudio, environment: environment)
     }
     return members
   }

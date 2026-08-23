@@ -39,11 +39,11 @@ private func realPlayer() throws -> MoviePlayer {
   let byName = try #require(player.member(.string("frameloop"), castLib: nil) as? CastMember)
   #expect(byName.name == "frameloop")
 
-  let byNumber = try #require(player.member(.integer(4), castLib: .integer(2)) as? CastMember)
+  let byNumber = try #require(player.member(.integer(4), castLib: .integer(1)) as? CastMember)
   #expect(byNumber.name == "frameloop")
 
   let byLibName = try #require(
-    player.member(.string("main"), castLib: .string("legoparts")) as? CastMember)
+    player.member(.string("main"), castLib: .string("Internal")) as? CastMember)
   #expect(byLibName.scriptType == .movie)
 }
 
@@ -82,12 +82,13 @@ private func realPlayer() throws -> MoviePlayer {
   #expect(player.movieModel.getProperty("exitLock").asInteger() == 1)
   //   the itemDelimiter = ","
   #expect(player.movieModel.getProperty("itemDelimiter").asString() == ",")
-  //   the actorList = []
+  //   the actorList = [], which the `play` and `database` managers then
+  //   join with `(the actorList).add(me)` as prepareMovie constructs them
   guard case .listType(let actorList) = player.movieModel.getProperty("actorList") else {
     Issue.record("actorList should be a list")
     return
   }
-  #expect(actorList.elements.isEmpty)
+  #expect(actorList.elements.count == 2)
 
   //   glob = [#EDITOR: [:], #catalog: [:], #PLAYER: [:]] with managers
   //   installed by new(script(...)) — makeObject instantiating real parent

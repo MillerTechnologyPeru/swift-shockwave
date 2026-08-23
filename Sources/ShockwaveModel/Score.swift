@@ -63,4 +63,22 @@ public final class Score {
   public func frameBehaviors(at frame: Int) -> [ScoreChunk.BehaviorReference] {
     spans(at: frame).filter { $0.channel == 0 }.flatMap(\.behaviors)
   }
+
+  /// The tempo (in FPS) authored on `frame`'s tempo channel, or `nil` when
+  /// there's no authored tempo change in effect (untouched channel, or a
+  /// mode this doesn't resolve to an FPS value) — callers fall back to the
+  /// movie's default frame rate. Only the direct-FPS (1...120) and D6+
+  /// FPS-via-cue-point (246) modes resolve; delay/wait-for-click/wait-for-
+  /// sound (247/248/254/255) are recognized but not implemented, so they
+  /// fall through to the caller's default rather than being half-modeled.
+  public func frameTempo(at frame: Int) -> Int? {
+    guard frame >= 1, frame <= chunk.frames.count,
+      let record = chunk.frames[frame - 1].tempoRecord()
+    else { return nil }
+    switch record.tempo {
+    case 246: return record.tempoCuePoint > 0 ? record.tempoCuePoint : nil
+    case 1...120: return record.tempo
+    default: return nil
+    }
+  }
 }

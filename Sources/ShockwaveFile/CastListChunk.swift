@@ -62,7 +62,16 @@ public struct CastListChunk: Sendable {
         let index = cast * itemsPerCast + k
         return index < list.items.count ? list.items[index] : []
       }
-      let metadata = item(0)
+      // Each cast's four items are name, file path, preload mode, then the
+      // member-range/owner-id metadata — at 1-based positions within the
+      // cast's group, because the list carries one leading item before the
+      // first cast (53 items for the junkbot sample's 13 casts). Reading
+      // the metadata from slot 0 instead of 4 picks up the NEXT cast's
+      // owner id, which quietly attaches every library to the wrong cast
+      // table: `screens_by_peter` came out empty and its 192 members were
+      // credited to `backgrounds`. Verified against dirplayer-rs and the
+      // raw item offsets.
+      let metadata = item(4)
       var minMember: Int?
       var maxMember: Int?
       var resourceId: Int?

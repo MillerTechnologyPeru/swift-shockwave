@@ -45,13 +45,25 @@ public final class ScriptInstance: LingoObject {
     properties[name.asciiLowercased()] = value
   }
 
+  /// Calls one of this script's handlers.
+  ///
+  /// A Lingo handler declares `me` as its first parameter and reads it as
+  /// argument zero, so the instance is prepended here rather than at every
+  /// call site. Without it `me` is VOID inside the handler, and anything
+  /// the handler passes onward — `(the actorList).add(me)` being the one
+  /// that matters — hands out VOID instead of the object.
   public override func callMethod(_ name: String, args: [LingoValue]) -> LingoValue {
     if let handler = handler(named: name), let chunk = member.scriptChunk {
-      let result = try? LingoVM.call(
-        handler: handler, chunk: chunk, names: member.scriptNames, args: args, receiver: self,
-        host: player, environment: lingoEnvironment, version: player.lingoVersion,
-        capitalX: member.scriptUsesCapitalContext)
-      return result ?? .void
+      do {
+        return try LingoVM.call(
+          handler: handler, chunk: chunk, names: member.scriptNames,
+          args: [.object(self)] + args, receiver: self,
+          host: player, environment: lingoEnvironment, version: player.lingoVersion,
+          capitalX: member.scriptUsesCapitalContext)
+      } catch {
+        player.reportScriptError("\(member.name ?? "?").\(name): \(error)")
+        return .void
+      }
     }
     return super.callMethod(name, args: args)
   }

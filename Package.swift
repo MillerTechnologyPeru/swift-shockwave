@@ -9,11 +9,14 @@ let package = Package(
     products: [
         .library(name: "ShockwaveFile", targets: ["ShockwaveFile"]),
         .library(name: "ShockwaveModel", targets: ["ShockwaveModel"]),
-        .library(name: "ShockwavePlayer", targets: ["ShockwavePlayer"])
+        .library(name: "ShockwavePlayer", targets: ["ShockwavePlayer"]),
+        .executable(name: "ShockwaveSDL3", targets: ["ShockwaveSDL3"])
     ],
     dependencies: [
         .package(url: "https://github.com/MillerTechnologyPeru/swift-lingo", branch: "master"),
-        .package(url: "https://github.com/apple/swift-binary-parsing", from: "0.0.1")
+        .package(url: "https://github.com/apple/swift-binary-parsing", from: "0.0.1"),
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
+        .package(url: "https://github.com/PureSwift/SDL.git", from: "3.2.0")
     ],
     targets: [
         .target(
@@ -40,6 +43,16 @@ let package = Package(
                 .product(name: "LingoRuntime", package: "swift-lingo"),
                 .product(name: "LingoBytecode", package: "swift-lingo"),
                 .product(name: "LingoVM", package: "swift-lingo")
+            ],
+            swiftSettings: [.enableUpcomingFeature("ApproachableConcurrency")]
+        ),
+        .executableTarget(
+            name: "ShockwaveSDL3",
+            dependencies: [
+                .product(name: "SDL3Swift", package: "SDL"),
+                "ShockwaveFile", "ShockwaveModel", "ShockwavePlayer",
+                .product(name: "LingoRuntime", package: "swift-lingo"),
+                .product(name: "ArgumentParser", package: "swift-argument-parser")
             ],
             swiftSettings: [.enableUpcomingFeature("ApproachableConcurrency")]
         ),

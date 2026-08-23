@@ -148,6 +148,195 @@ private func realMovieData() throws -> Data {
   let file = try RIFXFile.read(from: realMovieData())
   let config = try #require(try file.movieConfig())
   #expect(config.rawData.count == 84)
+  #expect(config.fileVersion == 0x640)
+  #expect(config.stageRect == DirectorRect(top: 50, left: 5, bottom: 470, right: 655))
+  #expect(config.stageRect.width == 650)
+  #expect(config.stageRect.height == 420)
+  #expect(config.minMember == 1)
+  #expect(config.maxMember == 44)
+}
+
+@Test func realMovieBitmapPropertiesParse() throws {
+  let file = try RIFXFile.read(from: realMovieData())
+  // The internal cast's first member is the `main` movie script — no
+  // bitmap properties — while legoparts's first is a brick bitmap.
+  let castList = try #require(try file.castList())
+  let keyTable = try #require(try file.keyTable())
+  func firstMember(ofEntry index: Int) throws -> CastMemberChunk {
+    let tableEntry = try #require(
+      keyTable.entries.first {
+        $0.fourCC == "CAS*" && $0.ownerChunkIndex == castList.entries[index].resourceId
+      })
+    let table = try file.castTable(at: file.chunkMap[tableEntry.childChunkIndex])
+    return try file.castMember(at: file.chunkMap[table.memberIds[0]])
+  }
+  #expect(try firstMember(ofEntry: 0).bitmapProperties == nil)  // "main" is a script
+  #expect(try firstMember(ofEntry: 1).bitmapProperties != nil)  // BRICK_01_BLUE
+
+  // First bitmap in the whole map: chunkMap[9], "brick_slickJump_dormant_1".
+  let brick = try file.castMember(at: file.chunkMap[9])
+  let properties = try #require(brick.bitmapProperties)
+  #expect(properties.rowBytes == 42)
+  #expect(properties.bounds == DirectorRect(top: 0, left: 0, bottom: 29, right: 41))
+  #expect(properties.regY == 29)  // game pieces register bottom-left
+  #expect(properties.regX == 0)
+  #expect(properties.bitsPerPixel == 8)
+  #expect(properties.paletteCastLib == -1)
+  // Stored -7, which is Web 216 (-8) in Lingo's numbering — the file
+  // keeps built-in ids one higher than Lingo does.
+  #expect(properties.paletteMember == -8)
+  #expect(properties.decodedByteCount == 1218)
+}
+
+@Test func realMovieBitmapDataDecodesForEveryBitmap() throws {
+  let file = try RIFXFile.read(from: realMovieData())
+  let keyTable = try #require(try file.keyTable())
+  var bitmapOwners: [Int: Int] = [:]  // owner CASt id -> BITD id
+  for entry in keyTable.entries
+  where entry.fourCC == "BITD" && entry.childChunkIndex < file.chunkMap.count {
+    bitmapOwners[entry.ownerChunkIndex] = entry.childChunkIndex
+  }
+
+  var decoded = 0
+  var raw = 0
+  for (ownerId, bitdId) in bitmapOwners {
+    guard ownerId >= 0, ownerId < file.chunkMap.count,
+      file.chunkMap[ownerId].fourCC == "CASt"
+    else { continue }
+    let member = try file.castMember(at: file.chunkMap[ownerId])
+    guard let properties = member.bitmapProperties else { continue }
+    let data = try file.chunkData(at: file.chunkMap[bitdId])
+    let decoded_ = try #require(
+      BitmapData.decode(data, expectedByteCount: properties.decodedByteCount),
+      "bitmap \(ownerId) failed to decode")
+    #expect(decoded_.pixels.count == properties.decodedByteCount)
+    if data.count == properties.decodedByteCount { raw += 1 } else { decoded += 1 }
+  }
+  #expect(decoded == 1054)
+  #expect(raw == 31)
+}
+
+@Test func realMovieSpriteRecordsDecode() throws {
+  let file = try RIFXFile.read(from: realMovieData())
+  let score = try #require(try file.score())
+  // Frame 9 ("mainmenu"), sprite 3 (channel 8): one of a row of menu
+  // buttons — same V, marching H, size matching its member's bounds.
+  let frame = score.frames[8]
+  let record = try #require(frame.spriteRecord(channel: 8))
+  #expect(record.ink == 8)  // matte
+  #expect(record.castLib == 13)
+  #expect(record.member == 22)
+  #expect(record.top == 170)
+  #expect(record.left == 56)
+  #expect(record.height == 37)
+  #expect(record.width == 45)
+
+  let neighbor = try #require(frame.spriteRecord(channel: 9))
+  #expect(neighbor.top == 170)
+  #expect(neighbor.left == 107)
+  #expect((neighbor.height, neighbor.width) == (37, 45))
+
+  // Untouched sprite channels decode to nil.
+  #expect(frame.spriteRecord(channel: 900) == nil)
+}
+
+@Test func inkByteSplitsIntoInkAndFlags() {
+  var bytes = [UInt8](repeating: 0, count: 48)
+  bytes[0] = 1
+  bytes[6] = 1  // populate the member ref so the record isn't treated as empty
+
+  // 0xA4: stretch set, ink 36 (background transparent). The junkbot sample
+  // stores exactly this in 20 of its records.
+  bytes[1] = 0xA4
+  var record = try! #require(SpriteChannelRecord(bytes: bytes))
+  #expect(record.ink == 36)
+  #expect(record.stretch)
+  #expect(!record.trails)
+
+  // Trails must not fold into the ink number: 0x40 | 8 is still matte.
+  bytes[1] = 0x48
+  record = try! #require(SpriteChannelRecord(bytes: bytes))
+  #expect(record.ink == 8)
+  #expect(record.trails)
+  #expect(!record.stretch)
+}
+
+@Test func colorCodeByteSplitsIntoFlags() {
+  var bytes = [UInt8](repeating: 0, count: 48)
+  bytes[6] = 1
+  bytes[20] = 0xC5  // moveable + editable + score color 5
+  bytes[21] = 204
+  bytes[22] = 0x10  // blend enabled
+  let record = try! #require(SpriteChannelRecord(bytes: bytes))
+  #expect(record.scoreColor == 5)
+  #expect(record.isEditable)
+  #expect(record.isMoveable)
+  #expect(record.blendAmount == 204)
+  #expect(record.blendEnabled)
+  #expect(record.blendPercent == 20)
+}
+
+@Test func blendByteIsIgnoredWithoutItsFlag() {
+  var bytes = [UInt8](repeating: 0, count: 48)
+  bytes[6] = 1
+  // A junk blend byte with the flag clear must still draw fully opaque.
+  bytes[21] = 255
+  var record = try! #require(SpriteChannelRecord(bytes: bytes))
+  #expect(!record.blendEnabled)
+  #expect(record.blendPercent == 100)
+
+  // The same byte with the flag set is genuinely invisible.
+  bytes[22] = 0x10
+  record = try! #require(SpriteChannelRecord(bytes: bytes))
+  #expect(record.blendPercent == 0)
+}
+
+@Test func realMovieBlendFlagMatchesBlendBytes() throws {
+  let file = try RIFXFile.read(from: realMovieData())
+  let score = try #require(try file.score())
+  var flagged = 0
+  var nonZeroBlend = 0
+  for frame in score.frames {
+    for channel in frame.channels.keys where channel >= 6 {
+      guard let record = frame.spriteRecord(channel: channel) else { continue }
+      if record.blendEnabled { flagged += 1 }
+      if record.blendAmount != 0 { nonZeroBlend += 1 }
+      // A sprite never carries an authored blend without the flag, and
+      // never sets the flag over a junk byte.
+      #expect(record.blendEnabled == (record.blendAmount != 0))
+    }
+  }
+  #expect(flagged == 14)
+  #expect(nonZeroBlend == 14)
+}
+
+@Test func realMovieSpriteFlagsDecode() throws {
+  let file = try RIFXFile.read(from: realMovieData())
+  let score = try #require(try file.score())
+  // Nothing in the sample uses trails, and its stage sprites aren't
+  // moveable or editable; blend is left at the opaque default.
+  for frame in score.frames {
+    for channel in frame.channels.keys where channel >= 6 {
+      guard let record = frame.spriteRecord(channel: channel) else { continue }
+      #expect(!record.trails)
+      #expect(record.ink < 64)
+    }
+  }
+}
+
+@Test func paletteChunkParsesColors() throws {
+  // No CLUT members exist in the junkbot sample (it uses built-in
+  // palettes only), so this exercises the parser on synthetic bytes.
+  let bytes: [UInt8] = [
+    0xFF, 0x00, 0x80, 0x00, 0x00, 0x00,  // red-ish
+    0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00,  // green
+  ]
+  let palette = try bytes.withParserSpan { span in
+    try PaletteChunk(parsing: &span)
+  }
+  #expect(palette.colors.count == 2)
+  #expect(palette.colors[0] == PaletteChunk.Color(red: 0xFF, green: 0x80, blue: 0x00))
+  #expect(palette.colors[1] == PaletteChunk.Color(red: 0x00, green: 0xFF, blue: 0x00))
 }
 
 @Test func realMovieCastListParses() throws {
@@ -161,24 +350,35 @@ private func realMovieData() throws -> Data {
   #expect(castList.entries.allSatisfy { $0.filePath.isEmpty })
   #expect(castList.entries.allSatisfy { $0.preloadMode == 0 })
 
+  // Every cast, the internal one included, carries a member range and the
+  // key-table owner id its `CAS*`/`Cinf`/`Lctx` chunks hang off. The ids
+  // run 1..14 with 8 skipped, so `libraryNumber` and file number diverge
+  // from cast 8 on.
   let internalCast = castList.entries[0]
-  #expect(internalCast.resourceId == nil)
+  #expect(internalCast.minMember == 1)
+  #expect(internalCast.maxMember == 44)
+  #expect(internalCast.resourceId == 0x10400)
 
   let legoparts = castList.entries[1]
   #expect(legoparts.minMember == 1)
-  #expect(legoparts.maxMember == 44)
-  #expect(legoparts.resourceId == 0x10400)
+  #expect(legoparts.maxMember == 36)
+  #expect(legoparts.resourceId == 0x20400)
+
+  let screens = castList.entries[10]
+  #expect(screens.name == "screens_by_peter")
+  #expect(screens.maxMember == 192)
+  #expect(screens.resourceId == 0xC0400)
 }
 
 @Test func realMovieCastTableJoinsThroughKeyTable() throws {
   let file = try RIFXFile.read(from: realMovieData())
   let castList = try #require(try file.castList())
   let keyTable = try #require(try file.keyTable())
-  let legoparts = castList.entries[1]
+  let internalCast = castList.entries[0]
 
   let tableEntry = try #require(
     keyTable.entries.first {
-      $0.fourCC == "CAS*" && $0.ownerChunkIndex == legoparts.resourceId
+      $0.fourCC == "CAS*" && $0.ownerChunkIndex == internalCast.resourceId
     })
   let table = try file.castTable(at: file.chunkMap[tableEntry.childChunkIndex])
   #expect(table.memberIds.count == 44)
@@ -219,10 +419,10 @@ private func realMovieData() throws -> Data {
     let member = try file.castMember(at: file.chunkMap[memberId])
     names.append(member.name ?? "")
   }
-  #expect(names.prefix(3) == ["main", "Display Text", "Tooltip"])
+  #expect(names.prefix(3) == ["BRICK_01_BLUE", "BRICK_02_BLUE", "BRICK_03_BLUE"])
   let digest = SHA256.hash(data: Data(names.joined(separator: "\n").utf8))
   let digestHex = digest.map { String(format: "%02x", $0) }.joined()
-  #expect(digestHex == "045f0a64127ba6ee7be077a4b44f55ed21e0188106cce68f6d9dbb0d9fa2c235")
+  #expect(digestHex == "29105ec8c45a9bea2d28c3ce7f45bec87fbd3686930496b7d7f160fe9da1be66")
 }
 
 @Test func realMovieFrameLabelsParse() throws {
@@ -263,16 +463,28 @@ private func realMovieData() throws -> Data {
   let channel0 = score.behaviorIntervals.filter { $0.channel == 0 }
   #expect(channel0.count == 10)
   let frameloopUses = score.behaviorIntervals.filter {
-    $0.behaviors.contains(ScoreChunk.BehaviorReference(castLib: 1, member: 6))
+    $0.behaviors.contains { $0.castLib == 1 && $0.member == 6 }
   }
   #expect(frameloopUses.count == 108)
+
+  // Behavior parameters travel as the text of a property list; the
+  // loading screen's "set my locZ" attachments each carry one, while the
+  // frame-script channel's frameloop takes none.
+  let parameterized = score.behaviorIntervals.flatMap(\.behaviors).compactMap(\.initializer)
+  #expect(parameterized.count == 142)
+  #expect(parameterized.allSatisfy { $0.hasPrefix("[") && $0.hasSuffix("]") })
+  #expect(parameterized.contains("[#mylocz: 10000001]"))
+  #expect(channel0.allSatisfy { $0.behaviors.allSatisfy { $0.initializer == nil } })
 }
 
 @Test func realShockwaveMovieIsDetectedAsCompressed() throws {
   let data = try Data(contentsOf: TestResources.junkbotShockwaveURL)
-  #expect(throws: ShockwaveFileError.compressedContainerUnsupported) {
-    try RIFXFile.read(from: data)
-  }
+  let file = try RIFXFile.read(from: data)
+  #expect(file.header.isAfterburner)
+  #expect(file.header.formatCode == "FGDM")
+  // Read back as ordinary chunks — see `AfterburnerTests` for the
+  // comparison against the movie this was burned from.
+  #expect(file.entries(fourCC: "CASt").count == 1400)
 }
 
 @Test func scriptContextBridgesToLingoBytecode() throws {
@@ -287,4 +499,43 @@ private func realMovieData() throws -> Data {
   #expect(context.sectionMap.count == 2)
   #expect(context.sectionMap[0].sectionId == -1)
   #expect(context.sectionMap[1].sectionId == -2)
+}
+
+/// The `MCsL` item layout that mis-attached every cast library for a long
+/// time: 13 casts × 4 items = 52, but the chunk carries 53 — one leading
+/// item before the first cast — so a cast's metadata (member range + owner
+/// id) is item `i*4 + 4`, not `i*4`. Reading slot 0 picks up the NEXT
+/// cast's owner id, silently shifting every library one table over: the
+/// internal cast came out empty, `screens_by_peter`'s 192 members were
+/// credited to `backgrounds`, and every score reference into cast 11 —
+/// the entire menu/level/credits UI — failed to resolve. Verified against
+/// dirplayer-rs, which loads the same thirteen casts.
+@Test func castListMetadataIsAlignedToItsOwnCast() throws {
+  let file = try RIFXFile.read(from: realMovieData())
+  let castList = try #require(try file.castList())
+  let keyTable = try #require(try file.keyTable())
+
+  // Every entry carries an owner id, and wherever it owns a CAS* table the
+  // table's slot count matches the entry's own declared range — a shifted
+  // read pairs `screens_by_peter` (max 192) with a 58-slot table. An
+  // entry declared empty (`unused levels`, max 0) legitimately owns none.
+  var tablesChecked = 0
+  for entry in castList.entries {
+    let resourceId = try #require(entry.resourceId, "\(entry.name) should carry an owner id")
+    guard
+      let tableEntry = keyTable.entries.first(where: {
+        $0.fourCC == "CAS*" && $0.ownerChunkIndex == resourceId
+      })
+    else {
+      #expect(entry.maxMember == 0, "\(entry.name) has no CAS* table yet declares members")
+      continue
+    }
+    let table = try file.castTable(at: file.chunkMap[tableEntry.childChunkIndex])
+    let declaredSlots = (entry.maxMember ?? 0) - (entry.minMember ?? 1) + 1
+    #expect(
+      table.memberIds.count == declaredSlots,
+      "\(entry.name): table has \(table.memberIds.count) slots, range declares \(declaredSlots)")
+    tablesChecked += 1
+  }
+  #expect(tablesChecked == 12)
 }
