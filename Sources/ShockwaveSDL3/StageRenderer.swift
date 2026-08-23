@@ -92,11 +92,26 @@ final class StageRenderer {
       text: text, colorIndex: record.foreColor, layout: layout, size: (rect.width, rect.height),
       texture: nil)
     defer { textTextures[key] = entry }
+    // A font the movie carries is drawn from its own outlines; anything
+    // else goes through the system's text engine.
+    let embedded = Self.embeddedMask(
+      of: member, width: rect.width, height: rect.height, movie: movie
+    ).map { mask -> [UInt8] in
+      var pixels = [UInt8](repeating: 0, count: rect.width * rect.height * 4)
+      for (index, painted) in mask.enumerated() where painted {
+        pixels[index * 4] = color.red
+        pixels[index * 4 + 1] = color.green
+        pixels[index * 4 + 2] = color.blue
+        pixels[index * 4 + 3] = 255
+      }
+      return pixels
+    }
     guard
-      let rgba = TextRasterizer.rgba(
-        text: text, width: rect.width, height: rect.height, color: color,
-        fontName: layout.fontName, fontSize: Double(layout.fontSize),
-        fixedLineSpace: layout.fixedLineSpace, alignment: layout.alignment),
+      let rgba = embedded
+        ?? TextRasterizer.rgba(
+          text: text, width: rect.width, height: rect.height, color: color,
+          fontName: layout.fontName, fontSize: Double(layout.fontSize),
+          fixedLineSpace: layout.fixedLineSpace, alignment: layout.alignment),
       let texture = try? SDLTexture(
         renderer: renderer, format: .init(rawValue: SDL_PIXELFORMAT_RGBA32.rawValue), access: .static,
         width: rect.width, height: rect.height)
@@ -111,8 +126,11 @@ final class StageRenderer {
 
   /// Which pixels a text member paints when drawn into `width`×`height`,
   /// for the player's pointer hit-testing.
-  static func textCoverage(of member: CastMember, width: Int, height: Int) -> [Bool]? {
+  static func textCoverage(of member: CastMember, width: Int, height: Int, movie: Movie) -> [Bool]? {
     guard member.isTextMember, let text = member.text, !text.isEmpty else { return nil }
+    if let mask = embeddedMask(of: member, width: width, height: height, movie: movie) {
+      return mask
+    }
     let layout = member.textLayout
     guard
       let rgba = TextRasterizer.rgba(
@@ -126,9 +144,28 @@ final class StageRenderer {
 
   /// The height a text member's content needs at `width`, for the player's
   /// auto-sizing text sprites.
-  static func textHeight(of member: CastMember, width: Int) -> Int {
+  /// Where a text member set in a font the movie carries paints, or `nil`
+  /// when its font isn't one.
+  static func embeddedMask(
+    of member: CastMember, width: Int, height: Int, movie: Movie
+  ) -> [Bool]? {
+    guard member.isTextMember, let text = member.text, !text.isEmpty else { return nil }
+    let layout = member.textLayout
+    guard let name = layout.fontName, let font = movie.castManager.embeddedFont(named: name)
+    else { return nil }
+    return EmbeddedTextRasterizer.mask(
+      text: text, font: font, size: layout.fontSize, width: width, height: height,
+      fixedLineSpace: layout.fixedLineSpace, alignment: layout.alignment)
+  }
+
+  static func textHeight(of member: CastMember, width: Int, movie: Movie) -> Int {
     guard member.isTextMember, let text = member.text, !text.isEmpty else { return 0 }
     let layout = member.textLayout
+    if let name = layout.fontName, let font = movie.castManager.embeddedFont(named: name) {
+      return EmbeddedTextRasterizer.height(
+        text: text, font: font, size: layout.fontSize, width: width,
+        fixedLineSpace: layout.fixedLineSpace)
+    }
     return TextRasterizer.height(
       text: text, width: width, fontName: layout.fontName, fontSize: Double(layout.fontSize),
       fixedLineSpace: layout.fixedLineSpace)
