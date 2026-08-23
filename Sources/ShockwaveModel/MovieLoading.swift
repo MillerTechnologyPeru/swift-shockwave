@@ -113,14 +113,21 @@ extension Movie {
       var authoredText: String?
       var textStyle: XMediaText.Style?
       var textBox: (width: Int, height: Int)?
+      var embeddedFont: PFRFont?
       if let textId = textChunkIds[memberId] {
         authoredText = try? file.textChunk(at: file.chunkMap[textId]).text
       } else if let mediaId = mediaChunkIds[memberId],
         let data = try? file.chunkData(at: file.chunkMap[mediaId])
       {
-        authoredText = XMediaText.text(from: data)
-        textStyle = XMediaText.style(from: data)
-        textBox = XMediaText.boxSize(from: data)
+        // A font member's media is the font file itself; every other
+        // xtra member's is styled text.
+        if let font = PFRFont(data: data) {
+          embeddedFont = font
+        } else {
+          authoredText = XMediaText.text(from: data)
+          textStyle = XMediaText.style(from: data)
+          textBox = XMediaText.boxSize(from: data)
+        }
       }
       var bitmapData: Data?
       if chunk.type == .bitmap, let bitmapId = bitmapChunkIds[memberId] {
@@ -153,7 +160,8 @@ extension Movie {
         libraryNumber: libraryNumber, memberNumber: memberNumber, chunkId: memberId, chunk: chunk,
         scriptChunk: scriptChunk, scriptNames: scriptNames,
         scriptUsesCapitalContext: capitalContext, authoredText: authoredText,
-        textStyle: textStyle, textBox: textBox, bitmapData: bitmapData,
+        textStyle: textStyle, textBox: textBox, embeddedFont: embeddedFont,
+        bitmapData: bitmapData,
         filmLoopScore: filmLoopScore,
         soundData: soundData, shockwaveAudio: shockwaveAudio, environment: environment)
     }
