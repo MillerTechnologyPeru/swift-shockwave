@@ -50,6 +50,9 @@ public final class CastMember: LingoObject {
   /// for members that have none. Decoded on demand by whoever draws or
   /// hit-tests it.
   public let bitmapData: Data?
+  /// A font member's embedded typeface — the movie ships the font itself,
+  /// so text set in it draws the same everywhere.
+  public let embeddedFont: PFRFont?
   /// A film loop member's own score — the frames it plays — or `nil` for
   /// every other member type (and for a loop whose score didn't parse).
   public let filmLoopScore: ScoreChunk?
@@ -70,6 +73,7 @@ public final class CastMember: LingoObject {
     authoredText: String? = nil,
     textStyle: XMediaText.Style? = nil,
     textBox: (width: Int, height: Int)? = nil,
+    embeddedFont: PFRFont? = nil,
     bitmapData: Data? = nil,
     filmLoopScore: ScoreChunk? = nil,
     soundData: Data? = nil,
@@ -86,6 +90,7 @@ public final class CastMember: LingoObject {
     self.authoredText = authoredText
     self.textStyle = textStyle
     self.textBox = textBox
+    self.embeddedFont = embeddedFont
     self.bitmapData = bitmapData
     self.filmLoopScore = filmLoopScore
     self.soundData = soundData
