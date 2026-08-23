@@ -43,6 +43,14 @@ public final class CastManager {
     membersByName[name.asciiLowercased()]
   }
 
+  /// The typeface a font member of this name carries, if the movie ships
+  /// one. Director marks an embedded font by appending ` *` to its name in
+  /// the styles that use it, and names the member the same way, so a
+  /// style's font name finds its member directly.
+  public func embeddedFont(named name: String) -> PFRFont? {
+    member(named: name)?.embeddedFont
+  }
+
   /// The script member `new(script("name"))` instantiates, preferring a
   /// parent script when several share the name.
   public func scriptMember(named name: String) -> CastMember? {
