@@ -14,6 +14,14 @@ public protocol AudioSink: AnyObject {
   func stop(channel: Int)
   /// Whether `channel` still has sound to play.
   func isBusy(channel: Int) -> Bool
+  /// Silences (or restores) everything at the output without touching
+  /// channel state — `the soundEnabled`. Sounds keep running underneath,
+  /// so unmuting mid-sound picks up where it would have been.
+  func setMuted(_ muted: Bool)
+}
+
+extension AudioSink {
+  public func setMuted(_ muted: Bool) {}
 }
 
 /// One of Director's eight sound channels as Lingo sees it — `sound(n)`.
