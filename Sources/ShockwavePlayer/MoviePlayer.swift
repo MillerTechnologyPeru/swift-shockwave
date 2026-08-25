@@ -49,6 +49,9 @@ public final class MoviePlayer: LingoVMHost {
   /// The last `the soundEnabled` value pushed to the sink, so the movie
   /// property (which scripts write directly) only reaches it on change.
   var soundEnabledApplied = true
+  /// Set by `puppetTransition` (and one day the score's transition
+  /// channel); the host takes it when it next shows a new frame.
+  public var pendingTransition: StageTransition?
 
   /// `the soundEnabled` — the global mute. Lives on the movie model where
   /// Lingo reads and writes it; the player forwards changes to the sink.
@@ -340,6 +343,17 @@ public final class MoviePlayer: LingoVMHost {
       default:
         return .void
       }
+    }
+    // `puppetTransition(which {, time {, chunkSize}})` — time comes in
+    // quarter-seconds, capped at Director's 30-second maximum.
+    environment.registerGlobalFunction("puppetTransition") { [weak self] args in
+      guard let self, let type = args.first?.asInteger() else { return .void }
+      let quarterSeconds = args[safe: 1]?.asInteger() ?? 2
+      let chunkSize = args[safe: 2]?.asInteger() ?? 1
+      self.pendingTransition = StageTransition(
+        type: type, durationMilliseconds: min(30000, max(0, quarterSeconds * 250)),
+        chunkSize: chunkSize)
+      return .void
     }
     environment.registerGlobalFunction("marker") { [weak self] args in
       guard let score = self?.movieModel.score, let target = args.first else { return .void }
