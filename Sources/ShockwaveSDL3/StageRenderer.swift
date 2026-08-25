@@ -176,14 +176,17 @@ final class StageRenderer {
     backColorIndex: Int
   ) -> SDLTexture? {
     let key =
-      (member.libraryNumber << 24) | (member.memberNumber << 10) | (backColorIndex & 0xFF) << 2
+      (member.libraryNumber << 26) | (member.memberNumber << 12) | (backColorIndex & 0xFF) << 4
       | ink.cacheBits
     if let cached = textures[key] { return cached }
 
     var result: SDLTexture?
     defer { textures[key] = result }
 
-    guard let rgba = member.rgba(ink: ink, backColorIndex: backColorIndex) else { return nil }
+    guard var rgba = member.rgba(ink: ink, backColorIndex: backColorIndex) else { return nil }
+    if ink == .mask {
+      applyMaskMember(to: &rgba, member: member, properties: properties)
+    }
 
     let width = properties.bounds.width
     let height = properties.bounds.height
@@ -194,13 +197,75 @@ final class StageRenderer {
     rgba.withUnsafeBytes { buffer in
       try? texture.update(pixels: UnsafeMutableRawPointer(mutating: buffer.baseAddress!), pitch: width * 4)
     }
-    try? texture.setBlendMode([.alpha])
+    try? texture.setBlendMode(Self.blendMode(for: ink))
     // Point-scale, not bilinear: this is pixel art, and several sprites are
     // placed at many times their native size (e.g. a 12×15 icon stretched
     // to 136×30), where linear filtering smears into color noise.
     try? texture.setScaleMode(.nearest)
     result = texture
     return texture
+  }
+
+  /// How an ink combines with what's already on the stage. The keyed and
+  /// inverted inks are baked into the texture's pixels and composite
+  /// normally; the arithmetic inks are the blend equation itself.
+  private static func blendMode(for ink: SpriteInk) -> BitMaskOptionSet<SDLBlendMode> {
+    let mode: SDL_BlendMode
+    switch ink {
+    case .add:
+      mode = SDL_BLENDMODE_ADD
+    case .subtract:
+      // The stage minus the sprite: reverse subtract with both at full
+      // weight, alpha left alone.
+      mode = SDL_ComposeCustomBlendMode(
+        SDL_BLENDFACTOR_ONE, SDL_BLENDFACTOR_ONE, SDL_BLENDOPERATION_REV_SUBTRACT,
+        SDL_BLENDFACTOR_ZERO, SDL_BLENDFACTOR_ONE, SDL_BLENDOPERATION_ADD)
+    case .lightest:
+      mode = SDL_ComposeCustomBlendMode(
+        SDL_BLENDFACTOR_ONE, SDL_BLENDFACTOR_ONE, SDL_BLENDOPERATION_MAXIMUM,
+        SDL_BLENDFACTOR_ZERO, SDL_BLENDFACTOR_ONE, SDL_BLENDOPERATION_ADD)
+    case .darkest:
+      mode = SDL_ComposeCustomBlendMode(
+        SDL_BLENDFACTOR_ONE, SDL_BLENDFACTOR_ONE, SDL_BLENDOPERATION_MINIMUM,
+        SDL_BLENDFACTOR_ZERO, SDL_BLENDFACTOR_ONE, SDL_BLENDOPERATION_ADD)
+    case .darken:
+      mode = SDL_BLENDMODE_MUL
+    default:
+      mode = SDL_BLENDMODE_BLEND
+    }
+    return .init(rawValue: SDLBlendMode.RawValue(mode))
+  }
+
+  /// Mask ink: the next cast member's artwork is the stencil. Dark mask
+  /// pixels keep the sprite, light ones clear it — Director's 1-bit mask
+  /// convention — sampled at each sprite pixel, so a mask smaller than the
+  /// artwork clips to its own extent.
+  private func applyMaskMember(
+    to rgba: inout [UInt8], member: CastMember, properties: BitmapMemberProperties
+  ) {
+    let width = properties.bounds.width
+    let height = properties.bounds.height
+    guard
+      let maskMember = movie.castManager.library(number: member.libraryNumber)?
+        .member(member.memberNumber + 1),
+      let maskProperties = maskMember.chunk.bitmapProperties,
+      let mask = maskMember.rgba(ink: .copy, backColorIndex: 0)
+    else { return }
+    let maskWidth = maskProperties.bounds.width
+    let maskHeight = maskProperties.bounds.height
+    for y in 0..<height {
+      for x in 0..<width {
+        let index = y * width + x
+        guard x < maskWidth, y < maskHeight else {
+          rgba[index * 4 + 3] = 0
+          continue
+        }
+        let maskIndex = (y * maskWidth + x) * 4
+        let luminance =
+          Int(mask[maskIndex]) + Int(mask[maskIndex + 1]) + Int(mask[maskIndex + 2])
+        if luminance >= 3 * 128 { rgba[index * 4 + 3] = 0 }
+      }
+    }
   }
 
 }
