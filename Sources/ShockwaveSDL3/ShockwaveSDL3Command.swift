@@ -37,6 +37,9 @@ struct ShockwaveSDL3Command: AsyncParsableCommand {
   )
   var click: [String] = []
 
+  @Flag(help: "Start with sound muted (F10 toggles it while running).")
+  var mute = false
+
   @MainActor
   func run() async throws {
     let file = try RIFXFile.read(from: Data(contentsOf: URL(fileURLWithPath: moviePath)))
@@ -67,6 +70,7 @@ struct ShockwaveSDL3Command: AsyncParsableCommand {
     // No audio in headless runs; otherwise silent when no device opens.
     let audio = screenshot == nil ? SDLAudioSink() : nil
     player.audioSink = audio
+    if mute { player.soundEnabled = false }
     player.compressedSoundDecoder = { media in MP3Decoder.decode(media) }
     defer { audio?.close() }
 
@@ -142,6 +146,12 @@ struct ShockwaveSDL3Command: AsyncParsableCommand {
         case .keyDown(_, let keycode):
           if keycode.rawValue == UInt32(SDLK_ESCAPE) {
             running = false
+            break
+          }
+          // F10 is the shell's mute toggle — function keys never reach
+          // the movie, so nothing authored can collide with it.
+          if keycode.rawValue == UInt32(SDLK_F10) {
+            player.soundEnabled.toggle()
             break
           }
           let modifiers = KeyTranslation.modifiers
