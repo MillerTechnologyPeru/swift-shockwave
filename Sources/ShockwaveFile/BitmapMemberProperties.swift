@@ -37,14 +37,16 @@ public struct BitmapMemberProperties: Equatable, Sendable {
 
   public init?(specificData: Data) {
     let bytes = [UInt8](specificData)
-    guard bytes.count >= 24 else { return nil }
+    guard bytes.count >= 22 else { return nil }
     func u16(_ offset: Int) -> Int { Int(bytes[offset]) << 8 | Int(bytes[offset + 1]) }
     func i16(_ offset: Int) -> Int { Int(Int16(bitPattern: UInt16(u16(offset)))) }
     rowBytes = u16(0) & 0x3FFF
     bounds = DirectorRect(top: i16(2), left: i16(4), bottom: i16(6), right: i16(8))
     regY = i16(18)
     regX = i16(20)
-    bitsPerPixel = Int(bytes[23])
+    // Director 4 members stop after the registration point — they are
+    // 1-bit, the only depth that version stored without saying so.
+    bitsPerPixel = bytes.count >= 24 ? Int(bytes[23]) : 1
     if bytes.count >= 28 {
       paletteCastLib = i16(24)
       // The stored built-in id is one HIGHER than Lingo's numbering: the
