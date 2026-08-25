@@ -7,6 +7,11 @@ extension MoviePlayer {
   /// matching Director's documented startup event order.
   public func start() {
     guard !isPlaying else { return }
+    // Sound starts enabled unless the host already decided otherwise
+    // (a --mute flag sets the property before playback begins).
+    if case .void = movieModel.getProperty("soundEnabled") {
+      soundEnabled = true
+    }
     callHandler("prepareMovie")
     isPlaying = true
     enterFrame(1, isFirst: true)
@@ -22,6 +27,7 @@ extension MoviePlayer {
   public func step() {
     guard isPlaying, currentFrame > 0 else { return }
     advanceFilmLoops()
+    applySoundEnabled()
     serviceScoreSounds()
     for channel in soundChannels.values { channel.service() }
     dispatchMouseWithin()
