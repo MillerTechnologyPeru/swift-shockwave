@@ -125,3 +125,91 @@ private func manager(_ player: MoviePlayer, _ name: String) throws -> ScriptInst
   #expect(level1.listGetAProp(.symbol("moves")).asInteger() == 1)
   #expect(!player.transcript.contains { $0.hasPrefix("script error") })
 }
+
+/// Junkbot touching a hazard runs the lose path: the play manager fires
+/// the die sound, pauses, and hands #LOSE to the game manager, whose fail
+/// dialog picks one of its taunts into the "fail_msg" text member and
+/// offers try-again / hint / level-select.
+@MainActor
+@Test func losingALevelRaisesTheFailDialog() throws {
+  let player = try playerInLevel(1)
+  let play = try manager(player, "play_manager")
+  let game = try manager(player, "game_manager")
+
+  _ = play.callMethod("addStatus", args: [.symbol("damage"), .integer(1)])
+
+  #expect(play.getProperty("activeState").asString() == "pause")
+  #expect(game.getProperty("gameState").asString() == "loseGame")
+  let glob = player.movieModel.lingoEnvironment.getGlobal("glob")
+  // The fail dialog registered itself and wrote its taunt.
+  guard case .object = glob.listGetAProp(.symbol("fail_msg_obj")) else {
+    Issue.record("no fail dialog object")
+    return
+  }
+  let message = player.movieModel.castManager.member(named: "fail_msg")?.text ?? ""
+  #expect(!message.isEmpty)
+  #expect(!player.transcript.contains { $0.hasPrefix("script error") })
+
+  // TRY AGAIN restarts the level: back to running, with the move counter
+  // reset for the fresh attempt.
+  guard case .object(let dialog) = glob.listGetAProp(.symbol("fail_msg_obj")) else { return }
+  _ = dialog.callMethod(
+    "updateState",
+    args: [
+      .symbol("move2"),
+      .propertyList([
+        (key: .symbol("object"), value: .object(game)),
+        (key: .symbol("parameter"), value: .symbol("restart_level")),
+      ]),
+    ])
+  // The dialog slides out on `the timer` before its callback restarts
+  // the level, so this takes a few seconds of stepped play.
+  let deadline = Date().addingTimeInterval(20)
+  while Date() < deadline, play.getProperty("activeState").asString() != "Run" {
+    player.step()
+    Thread.sleep(forTimeInterval: 0.02)
+  }
+  #expect(play.getProperty("activeState").asString() == "Run")
+  #expect(!player.transcript.contains { $0.hasPrefix("script error") })
+}
+
+/// The success dialog's NEXT LEVEL button carries the game on: the big
+/// message slides out and its callback loads the following level of the
+/// building, back in the running state.
+@MainActor
+@Test func nextLevelAdvancesFromTheSuccessDialog() throws {
+  let player = try playerInLevel(1)
+  let play = try manager(player, "play_manager")
+  let game = try manager(player, "game_manager")
+
+  // Clear level 1 (the win path proven above).
+  _ = play.callMethod("addStatus", args: [.symbol("moves"), .integer(1)])
+  let goals = play.getProperty("numGoals").asInteger() ?? 0
+  for _ in 0..<goals {
+    _ = play.callMethod("addStatus", args: [.symbol("goals"), .integer(1)])
+  }
+  #expect(game.getProperty("gameState").asString() == "INTERLEVEL")
+
+  let glob = player.movieModel.lingoEnvironment.getGlobal("glob")
+  guard case .object(let dialog) = glob.listGetAProp(.symbol("BIG_MSG_OBJ")) else {
+    Issue.record("no success dialog object")
+    return
+  }
+  _ = dialog.callMethod(
+    "updateState",
+    args: [
+      .symbol("move2"),
+      .propertyList([
+        (key: .symbol("object"), value: .object(game)),
+        (key: .symbol("parameter"), value: .symbol("com_nextlevel")),
+      ]),
+    ])
+  let deadline = Date().addingTimeInterval(20)
+  while Date() < deadline, play.getProperty("activeState").asString() != "Run" {
+    player.step()
+    Thread.sleep(forTimeInterval: 0.02)
+  }
+  #expect(play.getProperty("activeState").asString() == "Run")
+  #expect(glob.listGetAProp(.symbol("current")).listGetAProp(.symbol("level")).asInteger() == 2)
+  #expect(!player.transcript.contains { $0.hasPrefix("script error") })
+}
