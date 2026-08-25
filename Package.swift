@@ -13,7 +13,7 @@ let package = Package(
         .executable(name: "ShockwaveSDL3", targets: ["ShockwaveSDL3"])
     ],
     dependencies: [
-        .package(url: "https://github.com/MillerTechnologyPeru/swift-lingo", branch: "master"),
+        .package(url: "https://github.com/MillerTechnologyPeru/swift-lingo", revision: "1946066d91b05a7a7ce356bf752218199e1a31ba"),
         .package(url: "https://github.com/apple/swift-binary-parsing", from: "0.0.1"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
         .package(url: "https://github.com/PureSwift/SDL.git", from: "3.2.0")
