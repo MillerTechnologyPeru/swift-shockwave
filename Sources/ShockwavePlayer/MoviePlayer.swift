@@ -46,6 +46,25 @@ public final class MoviePlayer: LingoVMHost {
   /// What each score sound channel was last seen carrying, so a sound
   /// sustained across frames starts once rather than every frame.
   var scoreSounds: [Int: (castLib: Int, member: Int)] = [:]
+  /// The last `the soundEnabled` value pushed to the sink, so the movie
+  /// property (which scripts write directly) only reaches it on change.
+  var soundEnabledApplied = true
+
+  /// `the soundEnabled` — the global mute. Lives on the movie model where
+  /// Lingo reads and writes it; the player forwards changes to the sink.
+  public var soundEnabled: Bool {
+    get { movieModel.getProperty("soundEnabled").asBool() }
+    set { movieModel.setProperty("soundEnabled", value: .integer(newValue ? 1 : 0)) }
+  }
+
+  /// Pushes `the soundEnabled` to the sink when it changed — scripts
+  /// assign the property directly, so it is polled rather than observed.
+  func applySoundEnabled() {
+    let enabled = soundEnabled
+    guard enabled != soundEnabledApplied else { return }
+    soundEnabledApplied = enabled
+    audioSink?.setMuted(!enabled)
+  }
   /// The audio backend; `nil` plays nothing (headless runs, tests).
   public var audioSink: AudioSink?
   /// Decodes a compressed (Shockwave Audio, MP3) sound member's bitstream
