@@ -43,6 +43,9 @@ public final class MoviePlayer: LingoVMHost {
   var filmLoopFrames: [Int: Int] = [:]
   /// Director's sound channels, created as Lingo asks for them.
   var soundChannels: [Int: SoundChannel] = [:]
+  /// What each score sound channel was last seen carrying, so a sound
+  /// sustained across frames starts once rather than every frame.
+  var scoreSounds: [Int: (castLib: Int, member: Int)] = [:]
   /// The audio backend; `nil` plays nothing (headless runs, tests).
   public var audioSink: AudioSink?
   /// Decodes a compressed (Shockwave Audio, MP3) sound member's bitstream
@@ -358,8 +361,10 @@ public final class MoviePlayer: LingoVMHost {
       }
       let channel = self.soundChannel(channelNumber)
       if target.asInteger() == 0 {
+        channel.isPuppeted = false
         channel.stop()
       } else if let member = self.member(target, castLib: nil) as? CastMember {
+        channel.isPuppeted = true
         channel.play(member: member)
       }
       return .void
