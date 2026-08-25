@@ -137,6 +137,16 @@ struct ShockwaveSDL3Command: AsyncParsableCommand {
       return
     }
 
+    // The stage renders into a texture rather than straight to the window:
+    // the previous frame's texture is what a transition wipes away from.
+    let stageSize = (width: stage.right - stage.left, height: stage.bottom - stage.top)
+    var stageTexture = try SDLTexture(
+      renderer: renderer, format: .init(rawValue: SDL_PIXELFORMAT_RGBA32.rawValue),
+      access: .target, width: stageSize.width, height: stageSize.height)
+    var previousTexture = try SDLTexture(
+      renderer: renderer, format: .init(rawValue: SDL_PIXELFORMAT_RGBA32.rawValue),
+      access: .target, width: stageSize.width, height: stageSize.height)
+
     var running = true
     while running {
       while let event = SDL.pollEvent() {
@@ -185,10 +195,23 @@ struct ShockwaveSDL3Command: AsyncParsableCommand {
         flushTranscript()
       }
 
+      swap(&stageTexture, &previousTexture)
+      try renderer.setTarget(stageTexture)
       try renderer.setDrawColor(red: 255, green: 255, blue: 255, alpha: 255)
       try renderer.clear()
       stageRenderer.renderFrame(player.currentFrame, player: player)
-      renderer.present()
+      try renderer.setTarget(nil)
+      let destination = SDL_FRect(
+        x: 0, y: 0, w: Float(stageSize.width), h: Float(stageSize.height))
+      if let transition = player.pendingTransition {
+        player.pendingTransition = nil
+        TransitionAnimator.play(
+          transition, from: previousTexture, to: stageTexture, renderer: renderer,
+          width: stageSize.width, height: stageSize.height)
+      } else {
+        try renderer.copy(stageTexture, destination: destination)
+        renderer.present()
+      }
       SDL_Delay(UInt32(player.frameDelayMs.rounded()))
     }
 
