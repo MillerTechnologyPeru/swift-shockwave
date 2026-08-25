@@ -101,8 +101,35 @@ public struct CastMemberChunk: Sendable {
   }
 
   public init(parsing input: inout ParserSpan) throws(any Error) {
+    // Director 4 wrote `CASt` as [data length u16][info length u32] with
+    // the member type as the data's first byte; 5+ leads with the type as
+    // a full word. A 5+ chunk therefore always starts 00 00, and a 4
+    // chunk never does — its 16-bit data length is at least the type and
+    // flags bytes.
+    let firstHalf = try UInt16(parsingBigEndian: &input)
+    if firstHalf != 0 {
+      let dataLength = Int(firstHalf)
+      let infoLength = try Int(parsing: &input, storedAsBigEndian: UInt32.self)
+      guard dataLength >= 1 else { throw ShockwaveFileError.invalidOffset(dataLength) }
+      var data = try input.sliceSpan(byteCount: dataLength)
+      let type = try CastMemberType(rawValue: UInt32(UInt8(parsing: &data)))
+      if dataLength >= 2 { _ = try UInt8(parsing: &data) }  // flags
+      let specificData = Data(parsingRemainingBytes: &data)
+      var name: String?
+      var scriptText: String?
+      var scriptId = 0
+      var infoItems: [[UInt8]] = []
+      if infoLength > 0 {
+        var info = try input.sliceSpan(byteCount: infoLength)
+        (infoItems, name, scriptText, scriptId) = try Self.readInfo(&info)
+      }
+      self.init(
+        type: type, name: name, scriptText: scriptText, scriptId: scriptId,
+        infoItems: infoItems, specificData: specificData)
+      return
+    }
     let type = try CastMemberType(
-      rawValue: UInt32(parsingBigEndian: &input))
+      rawValue: UInt32(try UInt16(parsingBigEndian: &input)))
     let infoLength = try Int(parsing: &input, storedAsBigEndian: UInt32.self)
     let dataLength = try Int(parsing: &input, storedAsBigEndian: UInt32.self)
 
@@ -112,25 +139,7 @@ public struct CastMemberChunk: Sendable {
     var infoItems: [[UInt8]] = []
     if infoLength > 0 {
       var info = try input.sliceSpan(byteCount: infoLength)
-      let infoStart = info.startPosition
-      let dataOffset = try Int(parsing: &info, storedAsBigEndian: UInt32.self)
-      let _ = try UInt32(parsingBigEndian: &info)  // unknown
-      let _ = try UInt32(parsingBigEndian: &info)  // unknown
-      let _ = try UInt32(parsingBigEndian: &info)  // flags
-      scriptId = try Int(parsing: &info, storedAsBigEndian: UInt32.self)
-      let consumed = info.startPosition - infoStart
-      guard dataOffset >= consumed else {
-        throw ShockwaveFileError.invalidOffset(dataOffset)
-      }
-      try info.seek(toRelativeOffset: dataOffset - consumed)
-      let list = try ListItems(parsing: &info)
-      infoItems = list.items
-      if let textItem = infoItems.first, !textItem.isEmpty {
-        scriptText = String(decoding: textItem, as: UTF8.self)
-      }
-      if infoItems.count > 1 {
-        name = ListItems.pascalString(infoItems[1])
-      }
+      (infoItems, name, scriptText, scriptId) = try Self.readInfo(&info)
     }
 
     var data = try input.sliceSpan(byteCount: dataLength)
@@ -144,5 +153,34 @@ public struct CastMemberChunk: Sendable {
       infoItems: infoItems,
       specificData: specificData
     )
+  }
+
+  /// The member's info block, unchanged since Director 4: a header whose
+  /// first word points at a list of items (script text, name, ...).
+  private static func readInfo(
+    _ info: inout ParserSpan
+  ) throws -> (items: [[UInt8]], name: String?, scriptText: String?, scriptId: Int) {
+    let infoStart = info.startPosition
+    let dataOffset = try Int(parsing: &info, storedAsBigEndian: UInt32.self)
+    let _ = try UInt32(parsingBigEndian: &info)  // unknown
+    let _ = try UInt32(parsingBigEndian: &info)  // unknown
+    let _ = try UInt32(parsingBigEndian: &info)  // flags
+    let scriptId = try Int(parsing: &info, storedAsBigEndian: UInt32.self)
+    let consumed = info.startPosition - infoStart
+    guard dataOffset >= consumed else {
+      throw ShockwaveFileError.invalidOffset(dataOffset)
+    }
+    try info.seek(toRelativeOffset: dataOffset - consumed)
+    let list = try ListItems(parsing: &info)
+    let infoItems = list.items
+    var scriptText: String?
+    var name: String?
+    if let textItem = infoItems.first, !textItem.isEmpty {
+      scriptText = String(decoding: textItem, as: UTF8.self)
+    }
+    if infoItems.count > 1 {
+      name = ListItems.pascalString(infoItems[1])
+    }
+    return (infoItems, name, scriptText, scriptId)
   }
 }
