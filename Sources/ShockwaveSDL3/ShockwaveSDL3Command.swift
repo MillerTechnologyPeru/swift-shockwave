@@ -142,8 +142,22 @@ struct ShockwaveSDL3Command: AsyncParsableCommand {
         case .keyDown(_, let keycode):
           if keycode.rawValue == UInt32(SDLK_ESCAPE) {
             running = false
-          } else {
-            player.dispatch("keyDown")
+            break
+          }
+          let modifiers = KeyTranslation.modifiers
+          player.setModifiers(
+            shift: modifiers.shift, option: modifiers.option, command: modifiers.command,
+            control: modifiers.control)
+          if let key = KeyTranslation.translate(keycode: keycode.rawValue, shift: modifiers.shift) {
+            player.pressKey(character: key.character, code: key.code)
+          }
+        case .keyUp(_, let keycode):
+          let modifiers = KeyTranslation.modifiers
+          player.setModifiers(
+            shift: modifiers.shift, option: modifiers.option, command: modifiers.command,
+            control: modifiers.control)
+          if let key = KeyTranslation.translate(keycode: keycode.rawValue, shift: modifiers.shift) {
+            player.releaseKey(character: key.character, code: key.code)
           }
         case .mouseMotion(_, let x, let y, _):
           player.moveMouse(x: Int(x), y: Int(y))
