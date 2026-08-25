@@ -82,10 +82,57 @@ public struct SpriteChannelRecord: Equatable, Sendable {
     self.blendEnabled = blendEnabled
   }
 
-  public init?(bytes: [UInt8]) {
+  public init?(bytes: [UInt8], version: Int = 13) {
     guard bytes.count >= 20 else { return nil }
     func u16(_ offset: Int) -> Int { Int(bytes[offset]) << 8 | Int(bytes[offset + 1]) }
     func i16(_ offset: Int) -> Int { Int(Int16(bitPattern: UInt16(u16(offset)))) }
+    if version <= 4 {
+      // Director 4's 20-byte record: script id, type, colors, thickness,
+      // ink byte, member (single internal cast), then the rect. Blend has
+      // no enable flag yet — a nonzero byte is an authored blend.
+      spriteType = Int(bytes[1])
+      foreColor = Int(bytes[2])
+      backColor = Int(bytes[3])
+      ink = Int(bytes[5] & 0x3F)
+      trails = bytes[5] & 0x40 != 0
+      stretch = bytes[5] & 0x80 != 0
+      castLib = u16(6) == 0 ? 0 : 1
+      member = u16(6)
+      top = i16(8)
+      left = i16(10)
+      height = i16(12)
+      width = i16(14)
+      scoreColor = Int(bytes[18] & 0x0F)
+      isEditable = bytes[18] & 0x40 != 0
+      isMoveable = bytes[18] & 0x80 != 0
+      blendAmount = Int(bytes[19])
+      blendEnabled = bytes[19] != 0
+      return
+    }
+    if version <= 7 {
+      // Director 5's 24-byte record: type, ink byte, castLib/member and
+      // the script ref as 16-bit pairs, colors, rect, color code, blend,
+      // thickness.
+      guard bytes.count >= 24 else { return nil }
+      spriteType = Int(bytes[0])
+      ink = Int(bytes[1] & 0x3F)
+      trails = bytes[1] & 0x40 != 0
+      stretch = bytes[1] & 0x80 != 0
+      castLib = u16(2)
+      member = u16(4)
+      foreColor = Int(bytes[10])
+      backColor = Int(bytes[11])
+      top = i16(12)
+      left = i16(14)
+      height = i16(16)
+      width = i16(18)
+      scoreColor = Int(bytes[20] & 0x0F)
+      isEditable = bytes[20] & 0x40 != 0
+      isMoveable = bytes[20] & 0x80 != 0
+      blendAmount = Int(bytes[21])
+      blendEnabled = bytes[21] != 0
+      return
+    }
     spriteType = Int(bytes[0])
     ink = Int(bytes[1] & 0x3F)
     trails = bytes[1] & 0x40 != 0
@@ -134,10 +181,14 @@ extension ScoreChunk.Frame {
   }
 
   /// Decodes the sprite record for a channel (Lingo sprite `n` is channel
-  /// `n + 5`), or `nil` when the channel is untouched or empty.
+  /// `n + 5`), or `nil` when the channel is untouched or empty. Director
+  /// 4/5 scores put a single main channel before the sprites where 6+ has
+  /// six special channels, so the caller's 6+-style numbering is shifted
+  /// down for them.
   public func spriteRecord(channel: Int) -> SpriteChannelRecord? {
-    guard let bytes = channels[channel],
-      let record = SpriteChannelRecord(bytes: bytes),
+    let index = recordVersion <= 7 ? channel - 5 : channel
+    guard let bytes = channels[index],
+      let record = SpriteChannelRecord(bytes: bytes, version: recordVersion),
       record.isPopulated
     else { return nil }
     return record
