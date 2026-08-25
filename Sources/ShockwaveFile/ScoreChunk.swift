@@ -18,9 +18,13 @@ public struct ScoreChunk: Sendable {
   /// movie that actually populates score sprites.
   public struct Frame: Sendable {
     public var channels: [Int: [UInt8]]
+    /// The score's frames-block version, which decides the sprite record
+    /// layout: 4 is Director 4's, 5–7 Director 5's, newer the 6+ one.
+    public var recordVersion: Int
 
-    public init(channels: [Int: [UInt8]]) {
+    public init(channels: [Int: [UInt8]], recordVersion: Int = 13) {
       self.channels = channels
+      self.recordVersion = recordVersion
     }
   }
 
@@ -86,12 +90,27 @@ public struct ScoreChunk: Sendable {
   }
 
   public init(parsing input: inout ParserSpan) throws(any Error) {
+    // Director 4/5 scores are the frame data alone; 6+ wraps it in an
+    // offset-table shell whose second word is the -3 header type marker.
+    // The bare layout has the frame-1 offset there instead — a small
+    // positive header size — which tells the two apart.
+    let totalLength = try Int(parsing: &input, storedAsBigEndian: UInt32.self)
+    let marker = try Int32(parsingBigEndian: &input)
+    if marker >= 0 {
+      var head: [UInt8] = []
+      head.reserveCapacity(totalLength)
+      withUnsafeBytes(of: UInt32(totalLength).bigEndian) { head.append(contentsOf: $0) }
+      withUnsafeBytes(of: UInt32(bitPattern: marker).bigEndian) { head.append(contentsOf: $0) }
+      let rest = try [UInt8](parsing: &input, byteCount: max(0, totalLength - 8))
+      (version, channelRecordSize, channelCount, displayedChannelCount, frames) =
+        try Self.readFrames(head + rest)
+      behaviorIntervals = []
+      return
+    }
     // Outer shell: an offset table of variable-size entries. Entry 0 is the
     // frame data; entry 1 indexes the behavior-interval descriptors, each of
     // which is a (primary, secondary, tertiary) triple of consecutive
     // entries.
-    let totalLength = try Int(parsing: &input, storedAsBigEndian: UInt32.self)
-    let _ = try Int32(parsingBigEndian: &input)  // header type marker (-3)
     let _ = try UInt32(parsingBigEndian: &input)  // offset to entry count
     let entryCount = try Int(parsing: &input, storedAsBigEndian: UInt32.self)
     let _ = try UInt32(parsingBigEndian: &input)  // entryCount + 1
@@ -193,7 +212,9 @@ public struct ScoreChunk: Sendable {
     var frames: [Frame] = []
     frames.reserveCapacity(frameCount)
     var position = headerSize
-    for _ in 0..<frameCount {
+    // Director 4/5 store zero here and the frames simply run to the end
+    // of the declared data.
+    while frameCount > 0 ? frames.count < frameCount : position + 2 <= actualLength {
       guard position + 2 <= data.count else { throw ShockwaveFileError.invalidOffset(position) }
       let frameLength = Int(readU16(data, position))
       let frameEnd = position + frameLength
@@ -226,7 +247,7 @@ public struct ScoreChunk: Sendable {
         channelsSnapshot[channel] = Array(
           buffer[(channel * recordSize)..<((channel + 1) * recordSize)])
       }
-      frames.append(Frame(channels: channelsSnapshot))
+      frames.append(Frame(channels: channelsSnapshot, recordVersion: version))
     }
     return (version, recordSize, channels, displayed, frames)
   }
