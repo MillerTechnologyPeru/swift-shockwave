@@ -134,6 +134,47 @@ private let ring: [UInt8] = [
   #expect(SpriteInk(inkNumber: 3) == .ghost)
   #expect(SpriteInk(inkNumber: 8) == .matte)
   #expect(SpriteInk(inkNumber: 36) == .backgroundTransparent)
-  // Unimplemented inks fall back to background transparent.
-  #expect(SpriteInk(inkNumber: 2) == .backgroundTransparent)
+  // The reverse family draws inverted; the arithmetic inks are blend
+  // equations; transparent/lighten key the background like ink 36.
+  #expect(SpriteInk(inkNumber: 2) == .notCopy)
+  #expect(SpriteInk(inkNumber: 4) == .notCopy)
+  #expect(SpriteInk(inkNumber: 9) == .mask)
+  #expect(SpriteInk(inkNumber: 32) == .blend)
+  #expect(SpriteInk(inkNumber: 33) == .add)
+  #expect(SpriteInk(inkNumber: 34) == .add)
+  #expect(SpriteInk(inkNumber: 35) == .subtract)
+  #expect(SpriteInk(inkNumber: 38) == .subtract)
+  #expect(SpriteInk(inkNumber: 37) == .lightest)
+  #expect(SpriteInk(inkNumber: 39) == .darkest)
+  #expect(SpriteInk(inkNumber: 41) == .darken)
+  #expect(SpriteInk(inkNumber: 1) == .backgroundTransparent)
+  #expect(SpriteInk(inkNumber: 40) == .backgroundTransparent)
+  // Every mode keeps a distinct cache slot.
+  let all: [SpriteInk] = [
+    .copy, .backgroundTransparent, .matte, .ghost, .notCopy, .mask, .blend, .add,
+    .subtract, .lightest, .darkest, .darken,
+  ]
+  #expect(Set(all.map(\.cacheBits)).count == all.count)
+}
+
+/// "Not copy" draws the artwork RGB-inverted with every pixel opaque —
+/// black ink becomes white — while the arithmetic inks leave the pixels
+/// untouched for the blend equation to combine.
+@Test func notCopyInvertsWithoutKeying() throws {
+  let rgba = try #require(
+    BitmapConversion.rgba(
+      pixels: ring, properties: properties(width: 5, height: 5), palette: testPalette,
+      ink: .notCopy, backColorIndex: 0, sourcePlanar: false))
+  // White background pixel -> black, still opaque.
+  #expect(rgba[0] == 0)
+  #expect(alpha(rgba, 0, 0, width: 5) == 255)
+  // Black artwork pixel -> white.
+  #expect(rgba[(1 * 5 + 1) * 4] == 255)
+
+  let added = try #require(
+    BitmapConversion.rgba(
+      pixels: ring, properties: properties(width: 5, height: 5), palette: testPalette,
+      ink: .add, backColorIndex: 0, sourcePlanar: false))
+  #expect(added[0] == 255)
+  #expect(alpha(added, 0, 0, width: 5) == 255)
 }
