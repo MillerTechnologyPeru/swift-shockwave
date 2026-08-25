@@ -8,10 +8,23 @@ extension Movie {
     from file: RIFXFile,
     environment: LingoEnvironment = LingoEnvironment()
   ) throws -> Movie {
-    guard let castList = try file.castList() else {
+    let keyTable = try file.keyTable()
+    // Movies before Director 5 have exactly one cast and no cast list
+    // chunk; their CAS* hangs off the movie itself, so a list with that
+    // single internal library is synthesized.
+    let castList: CastListChunk
+    if let stored = try file.castList() {
+      castList = stored
+    } else if keyTable?.entries.contains(where: { $0.fourCC == "CAS*" }) == true {
+      let movieResource = keyTable?.entries.first(where: { $0.fourCC == "CAS*" })?.ownerChunkIndex
+      castList = CastListChunk(entries: [
+        CastListEntry(
+          name: "Internal", filePath: "", preloadMode: nil, minMember: nil, maxMember: nil,
+          resourceId: movieResource)
+      ])
+    } else {
       throw ShockwaveModelError.missingCastList
     }
-    let keyTable = try file.keyTable()
 
     var libraries: [CastLibrary] = []
     libraries.reserveCapacity(castList.entries.count)
