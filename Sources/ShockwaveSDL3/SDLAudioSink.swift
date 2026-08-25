@@ -12,6 +12,9 @@ import ShockwavePlayer
 final class SDLAudioSink: AudioSink {
   private let device: SDL_AudioDeviceID
   private var streams: [Int: OpaquePointer] = [:]
+  /// Per-channel gains as set by play, so unmuting restores them.
+  private var gains: [Int: Float] = [:]
+  private var isMuted = false
 
   /// `nil` when no playback device could be opened (no audio hardware,
   /// or the audio subsystem isn't up) — the player then runs silent.
@@ -42,12 +45,21 @@ final class SDLAudioSink: AudioSink {
       SDL_DestroyAudioStream(stream)
       return
     }
-    SDL_SetAudioStreamGain(stream, Float(max(0, min(255, volume))) / 255)
+    let gain = Float(max(0, min(255, volume))) / 255
+    gains[channel] = gain
+    SDL_SetAudioStreamGain(stream, isMuted ? 0 : gain)
     sound.samples.withUnsafeBytes { buffer in
       _ = SDL_PutAudioStreamData(stream, buffer.baseAddress, Int32(buffer.count))
     }
     SDL_FlushAudioStream(stream)
     streams[channel] = stream
+  }
+
+  func setMuted(_ muted: Bool) {
+    isMuted = muted
+    for (channel, stream) in streams {
+      SDL_SetAudioStreamGain(stream, muted ? 0 : gains[channel] ?? 1)
+    }
   }
 
   func stop(channel: Int) {
