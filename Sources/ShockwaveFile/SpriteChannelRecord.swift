@@ -121,6 +121,18 @@ public struct SpriteChannelRecord: Equatable, Sendable {
 }
 
 extension ScoreChunk.Frame {
+  /// The member authored into a score sound channel (1 or 2) at this
+  /// frame, or `nil` while the channel is empty. The score stores the two
+  /// sound channels at indices 3 and 4, as a castLib/member pair in the
+  /// same layout a sprite record opens with.
+  public func soundMember(channel: Int) -> (castLib: Int, member: Int)? {
+    guard let bytes = channels[channel + 2], bytes.count >= 4 else { return nil }
+    let castLib = Int(bytes[0]) << 8 | Int(bytes[1])
+    let member = Int(bytes[2]) << 8 | Int(bytes[3])
+    guard member != 0 else { return nil }
+    return (castLib, member)
+  }
+
   /// Decodes the sprite record for a channel (Lingo sprite `n` is channel
   /// `n + 5`), or `nil` when the channel is untouched or empty.
   public func spriteRecord(channel: Int) -> SpriteChannelRecord? {
