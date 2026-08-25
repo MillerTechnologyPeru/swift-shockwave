@@ -32,6 +32,10 @@ public final class SoundChannel: LingoObject {
   /// Set by `play()`; cleared by `stop()`. While on, the player feeds the
   /// next playlist entry whenever the channel falls idle.
   private(set) var isPlaying = false
+  /// Whether `puppetSound` has taken this channel over — while on, the
+  /// score's own sound channel is ignored, exactly like a puppeted sprite
+  /// channel; `puppetSound(n, 0)` gives it back.
+  var isPuppeted = false
 
   init(number: Int, player: MoviePlayer) {
     self.number = number
@@ -120,5 +124,35 @@ public final class SoundChannel: LingoObject {
       return super.callMethod(name, args: args)
     }
     return .void
+  }
+}
+
+/// The score's two sound channels. Director plays whatever member is
+/// authored into them as the playhead moves: a new member starts when it
+/// first appears, sustains across the frames it spans rather than
+/// retriggering, and plays out even after its span ends. A channel
+/// `puppetSound` has taken over is the script's until given back.
+extension MoviePlayer {
+  func serviceScoreSounds() {
+    guard let score = movieModel.score, currentFrame >= 1,
+      currentFrame <= score.chunk.frames.count
+    else { return }
+    let frame = score.chunk.frames[currentFrame - 1]
+    for channelNumber in 1...2 {
+      let authored = frame.soundMember(channel: channelNumber)
+      let previous = scoreSounds[channelNumber]
+      guard authored?.member != previous?.member || authored?.castLib != previous?.castLib
+      else { continue }
+      if let authored {
+        scoreSounds[channelNumber] = authored
+      } else {
+        scoreSounds.removeValue(forKey: channelNumber)
+      }
+      guard let authored, !soundChannel(channelNumber).isPuppeted,
+        let member = movieModel.castManager.library(scoreCastLib: authored.castLib)?
+          .member(authored.member)
+      else { continue }
+      soundChannel(channelNumber).play(member: member)
+    }
   }
 }
