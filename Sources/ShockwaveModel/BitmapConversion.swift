@@ -35,7 +35,7 @@ public enum BitmapConversion {
     var output = [UInt8](repeating: 0, count: width * height * 4)
     // Pixels that match the ink's key color. For `.backgroundTransparent`
     // they all clear; for `.matte` only the edge-connected region clears.
-    var keyed = [Bool](repeating: false, count: ink == .copy ? 0 : width * height)
+    var keyed = [Bool](repeating: false, count: ink.keysBackground ? width * height : 0)
 
     func write(_ x: Int, _ y: Int, _ r: UInt8, _ g: UInt8, _ b: UInt8, _ a: UInt8) {
       let base = (y * width + x) * 4
@@ -54,7 +54,7 @@ public enum BitmapConversion {
         let row = y * rowBytes
         for x in 0..<width {
           let bit = Int((pixels[row + x / 8] >> (7 - x % 8)) & 1)
-          if ink != .copy, bit == keyBit { keyed[y * width + x] = true }
+          if ink.keysBackground, bit == keyBit { keyed[y * width + x] = true }
           if bit == 1 {
             write(x, y, 0, 0, 0, 255)
           } else {
@@ -70,7 +70,7 @@ public enum BitmapConversion {
           let index = Int(pixels[row + x])
           guard index < palette.count else { continue }
           let color = palette[index]
-          if ink != .copy, index == keyIndex { keyed[y * width + x] = true }
+          if ink.keysBackground, index == keyIndex { keyed[y * width + x] = true }
           write(x, y, color.red, color.green, color.blue, 255)
         }
       }
@@ -94,7 +94,7 @@ public enum BitmapConversion {
           let r = UInt8((value >> 10) & 0x1F) << 3
           let g = UInt8((value >> 5) & 0x1F) << 3
           let b = UInt8(value & 0x1F) << 3
-          if ink != .copy, r >= 0xF8, g >= 0xF8, b >= 0xF8 { keyed[y * width + x] = true }
+          if ink.keysBackground, r >= 0xF8, g >= 0xF8, b >= 0xF8 { keyed[y * width + x] = true }
           write(x, y, r, g, b, 255)
         }
       }
@@ -108,7 +108,7 @@ public enum BitmapConversion {
           let r = pixels[row + width + x]
           let g = pixels[row + width * 2 + x]
           let b = pixels[row + width * 3 + x]
-          if ink != .copy, r >= 0xF8, g >= 0xF8, b >= 0xF8 { keyed[y * width + x] = true }
+          if ink.keysBackground, r >= 0xF8, g >= 0xF8, b >= 0xF8 { keyed[y * width + x] = true }
           write(x, y, r, g, b, a)
         }
       }
@@ -117,23 +117,20 @@ public enum BitmapConversion {
     }
 
     switch ink {
-    case .copy:
-      break
-    case .backgroundTransparent:
+    case .backgroundTransparent, .ghost:
       for index in 0..<keyed.count where keyed[index] {
         output[index * 4 + 3] = 0
       }
     case .matte:
       clearEdgeConnectedRegion(keyed: keyed, width: width, height: height, output: &output)
-    case .ghost:
-      for index in 0..<keyed.count {
-        if keyed[index] {
-          output[index * 4 + 3] = 0
-        } else {
-          output[index * 4] = 255 - output[index * 4]
-          output[index * 4 + 1] = 255 - output[index * 4 + 1]
-          output[index * 4 + 2] = 255 - output[index * 4 + 2]
-        }
+    default:
+      break
+    }
+    if ink.invertsSource {
+      for index in 0..<(width * height) where output[index * 4 + 3] != 0 {
+        output[index * 4] = 255 - output[index * 4]
+        output[index * 4 + 1] = 255 - output[index * 4 + 1]
+        output[index * 4 + 2] = 255 - output[index * 4 + 2]
       }
     }
     return output
