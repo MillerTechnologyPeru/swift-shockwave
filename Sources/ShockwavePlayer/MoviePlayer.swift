@@ -29,6 +29,10 @@ public final class MoviePlayer: LingoVMHost {
   /// The sprite the pointer was last found over, for `mouseEnter`/
   /// `mouseLeave`/`mouseWithin`; `nil` when over the bare stage.
   var hoveredSprite: Int?
+  /// Keys currently held, as lowercased characters and Mac key codes —
+  /// the two spellings `keyPressed(...)` accepts.
+  var heldKeyCharacters: Set<String> = []
+  var heldKeyCodes: Set<Int> = []
   /// Per-pixel coverage of bitmap members under a given ink and key
   /// color, for hit-testing; an empty array records a member that
   /// couldn't be decoded so it isn't retried.
@@ -82,6 +86,7 @@ public final class MoviePlayer: LingoVMHost {
   public init(movie: Movie) {
     self.movieModel = movie
     registerBuiltins()
+    registerKeyboardBuiltins()
     registerNetworkingBuiltins()
     registerMovieHandlers()
   }
