@@ -93,3 +93,46 @@ private final class RecordingSink: AudioSink {
   #expect(sink.played.count == 3)
   #expect(channel.callMethod("getPlayList", args: []).count.asInteger() == 0)
 }
+
+/// The score's own sound channels play as the playhead crosses them: the
+/// sample's bumper frames carry `blockdrop`/`blockclick` then the three
+/// intro stings. A sound sustained across frames starts once; a channel
+/// `puppetSound` holds is the script's until given back.
+@MainActor
+@Test func scoreSoundChannelsPlayWithThePlayhead() throws {
+  let file = try RIFXFile.read(from: Data(contentsOf: TestResources.junkbotMovieURL))
+  let movie = try Movie.load(from: file)
+  let score = try #require(movie.score)
+
+  // What the score authors: nothing on frame 1, effects on frame 2, the
+  // intro stings from frame 3, silent again at "loading".
+  #expect(score.chunk.frames[0].soundMember(channel: 1) == nil)
+  #expect(score.chunk.frames[1].soundMember(channel: 1)?.member == 29)
+  #expect(score.chunk.frames[1].soundMember(channel: 2)?.member == 27)
+
+  let player = MoviePlayer(movie: movie)
+  let sink = RecordingSink()
+  player.audioSink = sink
+  player.start()
+
+  // The playhead reaching frame 2 starts both channels' members. (The
+  // movie holds on frame 1 waiting for its preload, so the playhead is
+  // moved directly.)
+  player.movePlayhead(to: 2)
+  player.serviceScoreSounds()
+  #expect(Set(sink.played.map(\.channel)) == [1, 2])
+  let afterFrame2 = sink.played.count
+
+  // The playhead staying put does not retrigger them.
+  player.serviceScoreSounds()
+  #expect(sink.played.count == afterFrame2)
+
+  // With channel 1 puppeted, its score sound is the script's to ignore.
+  _ = movie.lingoEnvironment.callGlobal("puppetSound", args: [.integer(1), .string("turn1")])
+  let afterPuppet = sink.played.count
+  player.movePlayhead(to: 3)
+  player.serviceScoreSounds()
+  // Channel 2's intro sting still plays; channel 1's is suppressed.
+  #expect(sink.played.count == afterPuppet + 1)
+  #expect(sink.played.last?.channel == 2)
+}
