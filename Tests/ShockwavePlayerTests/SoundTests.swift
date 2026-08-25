@@ -136,3 +136,38 @@ private final class RecordingSink: AudioSink {
   #expect(sink.played.count == afterPuppet + 1)
   #expect(sink.played.last?.channel == 2)
 }
+
+/// `the soundEnabled` is the global mute: scripts (or the host) flip it,
+/// and the player pushes the change to the sink without touching channel
+/// state, so unmuting picks sounds up where they would have been.
+@MainActor
+@Test func soundEnabledMutesTheSink() throws {
+  final class MutingSink: AudioSink {
+    var muted: Bool?
+    func play(_ sound: SoundResource, onChannel channel: Int, volume: Int, pan: Int) {}
+    func stop(channel: Int) {}
+    func isBusy(channel: Int) -> Bool { false }
+    func setMuted(_ muted: Bool) { self.muted = muted }
+  }
+  let file = try RIFXFile.read(from: Data(contentsOf: TestResources.junkbotMovieURL))
+  let movie = try Movie.load(from: file)
+  let player = MoviePlayer(movie: movie)
+  let sink = MutingSink()
+  player.audioSink = sink
+  player.start()
+  #expect(player.soundEnabled)
+
+  // A script writing the property is picked up on the next frame.
+  player.movieModel.setProperty("soundEnabled", value: .integer(0))
+  player.step()
+  #expect(sink.muted == true)
+  player.soundEnabled = true
+  player.step()
+  #expect(sink.muted == false)
+
+  // A host that mutes before starting stays muted from the first frame.
+  let mutedPlayer = MoviePlayer(movie: try Movie.load(from: file))
+  mutedPlayer.soundEnabled = false
+  mutedPlayer.start()
+  #expect(!mutedPlayer.soundEnabled)
+}
